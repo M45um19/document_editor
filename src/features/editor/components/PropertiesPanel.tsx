@@ -13,27 +13,48 @@ import {
   AlignRight,
   Plus,
   Trash2,
+  X,
 } from "lucide-react";
 
-export function PropertiesPanel() {
+interface PropertiesPanelProps {
+  onClose?: () => void;
+  className?: string;
+}
+
+export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProps) {
   return (
-    <aside className="w-72 sm:w-80 lg:w-84 xl:w-92 2xl:w-[380px] 3xl:w-[440px] bg-white border-l border-slate-200 flex flex-col shrink-0 overflow-y-auto select-none p-4 2xl:p-6 space-y-6 2xl:space-y-8 transition-all duration-200">
+    <aside
+      id="properties-panel"
+      className={`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px] bg-white border-t xl:border-t-0 xl:border-l border-slate-200 flex flex-col shrink-0 overflow-y-auto select-none p-4 sm:p-5 2xl:p-6 space-y-5 2xl:space-y-7 transition-all duration-200 ${className}`}
+    >
       {/* Panel Header */}
-      <div className="flex items-center gap-2 pb-2 2xl:pb-3 border-b border-slate-100">
-        <SlidersHorizontal className="w-4 h-4 2xl:w-5 2xl:h-5 text-slate-700" />
-        <h2 className="text-sm 2xl:text-base font-bold text-slate-900">Properties & Data</h2>
+      <div className="flex items-center justify-between pb-2 2xl:pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="w-4 h-4 2xl:w-5 2xl:h-5 text-slate-700 shrink-0" />
+          <h2 className="text-sm 2xl:text-base font-bold text-slate-900">Properties & Data</h2>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close Properties Panel"
+            className="xl:hidden p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Text Settings Section */}
-      <div className="space-y-3.5 2xl:space-y-4">
+      <div className="space-y-3 2xl:space-y-4">
         {/* Tab Header */}
-        <div className="flex items-center gap-2 border-b-2 border-blue-600 pb-1.5 2xl:pb-2 w-fit text-blue-600 font-bold text-xs 2xl:text-sm">
+        <div className="flex items-center gap-2 border-b-2 border-blue-600 pb-1 2xl:pb-1.5 w-fit text-blue-600 font-bold text-xs 2xl:text-sm">
           <Type className="w-4 h-4 2xl:w-4.5 2xl:h-4.5" />
           <span>Text Settings</span>
         </div>
 
-        {/* 2-Column Form Fields */}
-        <div className="grid grid-cols-2 gap-3 2xl:gap-4 pt-1">
+        {/* Form Fields Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 2xl:gap-4 pt-1">
           {/* Font Family */}
           <div className="space-y-1 2xl:space-y-1.5">
             <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
@@ -41,7 +62,7 @@ export function PropertiesPanel() {
             </label>
             <div className="flex items-center justify-between px-2.5 2xl:px-3 py-1.5 2xl:py-2 border border-slate-200 rounded-md text-xs 2xl:text-sm font-medium text-slate-800 bg-white shadow-2xs hover:border-slate-300 cursor-pointer">
               <span>Inter</span>
-              <ChevronDown className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-400" />
+              <ChevronDown className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-400 shrink-0" />
             </div>
           </div>
 
@@ -69,7 +90,7 @@ export function PropertiesPanel() {
             </label>
             <div className="flex items-center justify-between px-2.5 2xl:px-3 py-1.5 2xl:py-2 border border-slate-200 rounded-md text-xs 2xl:text-sm font-medium text-slate-800 bg-white shadow-2xs hover:border-slate-300 cursor-pointer">
               <span>Medium</span>
-              <ChevronDown className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-400" />
+              <ChevronDown className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-400 shrink-0" />
             </div>
           </div>
 
@@ -117,13 +138,13 @@ export function PropertiesPanel() {
       </div>
 
       {/* Table Settings Section */}
-      <div className="space-y-3.5 2xl:space-y-4 pt-2 border-t border-slate-100">
+      <div className="space-y-3 2xl:space-y-4 pt-2 border-t border-slate-100">
         <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
           <TableIcon className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-slate-700" />
           <span>Table Settings</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 2xl:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 2xl:gap-4">
           {/* Width */}
           <div className="space-y-1 2xl:space-y-1.5">
             <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
@@ -189,7 +210,7 @@ export function PropertiesPanel() {
       </div>
 
       {/* Column Management */}
-      <div className="space-y-2.5 2xl:space-y-3 pt-2 border-t border-slate-100">
+      <div className="space-y-2 2xl:space-y-3 pt-2 border-t border-slate-100">
         <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
           <Columns className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-blue-600" />
           <span>Column Management</span>
@@ -215,7 +236,7 @@ export function PropertiesPanel() {
       </div>
 
       {/* Row Management */}
-      <div className="space-y-2.5 2xl:space-y-3 pt-2 border-t border-slate-100">
+      <div className="space-y-2 2xl:space-y-3 pt-2 border-t border-slate-100">
         <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
           <Rows className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-slate-700" />
           <span>Row Management</span>
@@ -242,3 +263,4 @@ export function PropertiesPanel() {
     </aside>
   );
 }
+
