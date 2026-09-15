@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   SlidersHorizontal,
   Type,
@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { useEditorState } from "../hooks/useEditorState";
 
 interface PropertiesPanelProps {
   onClose?: () => void;
@@ -22,10 +23,37 @@ interface PropertiesPanelProps {
 }
 
 export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProps) {
+  const pages = useEditorState((s) => s.pages);
+  const activePage = useEditorState((s) => s.activePage);
+  const addTableRow = useEditorState((s) => s.addTableRow);
+  const deleteTableRow = useEditorState((s) => s.deleteTableRow);
+
+  const [fontSize, setFontSize] = useState("10");
+  const [tableWidth, setTableWidth] = useState("120");
+  const [padding, setPadding] = useState("0");
+  const [rowSpacing, setRowSpacing] = useState("1");
+  const [activeAlign, setActiveAlign] = useState<"left" | "center" | "right">("left");
+
+  // Find first table in current page for row operations
+  const currentPageObj = pages.find((p) => p.pageNumber === activePage) || pages[0];
+  const firstTableBlock = currentPageObj?.blocks.find((b) => b.type === "table");
+
+  const handleAddRow = () => {
+    if (firstTableBlock) {
+      addTableRow(activePage, firstTableBlock.id);
+    }
+  };
+
+  const handleDeleteRow = () => {
+    if (firstTableBlock) {
+      deleteTableRow(activePage, firstTableBlock.id);
+    }
+  };
+
   return (
     <aside
       id="properties-panel"
-      className={`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px] bg-white border-t xl:border-t-0 xl:border-l border-slate-200 flex flex-col shrink-0 overflow-y-auto select-none p-4 sm:p-5 2xl:p-6 space-y-5 2xl:space-y-7 transition-all duration-200 ${className}`}
+      className={`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px] bg-white rounded-lg border border-slate-200/90 shadow-sm flex flex-col shrink-0 overflow-y-auto select-none p-4 sm:p-5 2xl:p-6 space-y-5 2xl:space-y-6 transition-all duration-200 ${className}`}
     >
       {/* Panel Header */}
       <div className="flex items-center justify-between pb-2 2xl:pb-3 border-b border-slate-100">
@@ -38,7 +66,7 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
             type="button"
             onClick={onClose}
             aria-label="Close Properties Panel"
-            className="xl:hidden p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 transition"
+            className="xl:hidden p-1 text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100 transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -74,8 +102,9 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
             <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
               <input
                 type="text"
-                defaultValue="10"
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none"
+                value={fontSize}
+                onChange={(e) => setFontSize(e.target.value)}
+                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
               />
               <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
                 px
@@ -112,24 +141,36 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
             Alignment
           </label>
           <div className="flex items-center gap-1.5 2xl:gap-2">
-            {/* Left Align (Active) */}
             <button
               type="button"
-              className="p-1.5 2xl:p-2 rounded-md border border-blue-200 bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs"
+              onClick={() => setActiveAlign("left")}
+              className={`p-1.5 2xl:p-2 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                activeAlign === "left"
+                  ? "border-blue-200 bg-blue-50 text-blue-600 shadow-xs"
+                  : "border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
             >
               <AlignLeft className="w-4 h-4 2xl:w-4.5 2xl:h-4.5" />
             </button>
-            {/* Center Align */}
             <button
               type="button"
-              className="p-1.5 2xl:p-2 rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition shadow-2xs"
+              onClick={() => setActiveAlign("center")}
+              className={`p-1.5 2xl:p-2 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                activeAlign === "center"
+                  ? "border-blue-200 bg-blue-50 text-blue-600 shadow-xs"
+                  : "border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
             >
               <AlignCenter className="w-4 h-4 2xl:w-4.5 2xl:h-4.5" />
             </button>
-            {/* Right Align */}
             <button
               type="button"
-              className="p-1.5 2xl:p-2 rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition shadow-2xs"
+              onClick={() => setActiveAlign("right")}
+              className={`p-1.5 2xl:p-2 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                activeAlign === "right"
+                  ? "border-blue-200 bg-blue-50 text-blue-600 shadow-xs"
+                  : "border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
             >
               <AlignRight className="w-4 h-4 2xl:w-4.5 2xl:h-4.5" />
             </button>
@@ -153,8 +194,9 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
             <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
               <input
                 type="text"
-                defaultValue="120"
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none"
+                value={tableWidth}
+                onChange={(e) => setTableWidth(e.target.value)}
+                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
               />
               <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
                 px
@@ -181,8 +223,9 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
             <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
               <input
                 type="text"
-                defaultValue="0"
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none"
+                value={padding}
+                onChange={(e) => setPadding(e.target.value)}
+                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
               />
               <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
                 px
@@ -198,8 +241,9 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
             <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
               <input
                 type="text"
-                defaultValue="1"
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none"
+                value={rowSpacing}
+                onChange={(e) => setRowSpacing(e.target.value)}
+                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
               />
               <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
                 px
@@ -219,7 +263,8 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
         <div className="grid grid-cols-2 gap-2 2xl:gap-3">
           <button
             type="button"
-            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+            onClick={handleAddRow}
+            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-500" />
             <span>Add Column</span>
@@ -227,7 +272,8 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
 
           <button
             type="button"
-            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+            onClick={handleDeleteRow}
+            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-500" />
             <span>Delete Column</span>
@@ -245,7 +291,8 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
         <div className="grid grid-cols-2 gap-2 2xl:gap-3">
           <button
             type="button"
-            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+            onClick={handleAddRow}
+            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-500" />
             <span>Add Row</span>
@@ -253,7 +300,8 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
 
           <button
             type="button"
-            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+            onClick={handleDeleteRow}
+            className="flex items-center justify-center gap-1.5 py-2 2xl:py-2.5 px-2 rounded-md border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-500" />
             <span>Delete Row</span>
@@ -263,4 +311,3 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
     </aside>
   );
 }
-
