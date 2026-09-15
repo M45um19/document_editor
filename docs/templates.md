@@ -1,7 +1,7 @@
 # Feature Guide: Template Manager & Persistence
 
 ## Overview
-The Templates feature (`src/features/templates/`) manages template persistence, multi-template tab sessions, and automatic LocalStorage hydration. It ensures that user modifications are saved reliably and can be reopened instantly across sessions.
+The Templates feature (`src/features/templates/`) manages template persistence, multi-template tab synchronization, and distinct per-template LocalStorage slots. It ensures each template maintains its own independent design, pages, blocks, and metadata across browser sessions.
 
 ---
 
@@ -10,10 +10,14 @@ The Templates feature (`src/features/templates/`) manages template persistence, 
 ```text
 src/
 ├── components/layout/
-│   └── TabBar.tsx                     # Multi-template tab strip
+│   └── TabBar.tsx                     # Multi-template tab strip (Pure presentational)
 └── features/templates/
-    └── components/
-        └── SavedTemplatesPanel.tsx    # Bottom panel displaying saved template library
+    ├── components/
+    │   └── SavedTemplatesPanel.tsx    # Bottom panel displaying all saved templates
+    ├── hooks/
+    │   └── useTemplatesState.ts       # Central store for template list & per-template storage
+    └── types/
+        └── index.ts                   # Types for template items and storage contracts
 ```
 
 ---
@@ -21,121 +25,94 @@ src/
 ## Component Specifications
 
 ### 1. Multi-Template Tab Bar (`src/components/layout/TabBar.tsx`)
-Positioned below the main navigation header:
+Positioned immediately below the main application header (`bg-[#eef2f7]`):
 
 * **Tab Representation:**
-  * Each open tab displays a document icon (`FileText`), the template title (e.g. `"New-Template"`, `"Template-1"`), and a close button (`X`).
-  * **Active Tab:** Rendered in white (`bg-white`), highlighted with `text-blue-600`, with a bottom white blend line connecting to the workspace.
+  * Each tab represents a saved template from the user's template library.
+  * Displays a document icon (`FileText`), template title (e.g. `"Template-1"`, `"Template-2"`), and a close button (`X`).
+  * **Active Tab:** Rendered in white (`bg-white`), highlighted with `text-blue-600`, with a bottom white blend line connecting seamlessly to the workspace.
   * **Inactive Tabs:** Rendered with muted slate typography and subtle hover effects.
-* **Tab Operations:**
-  * **Switch Tab:** Clicking an inactive tab switches the active editor context to that template.
-  * **Close Tab:** Clicking `X` removes the tab from the active session. If only one tab remains, closing resets to a blank document.
-  * **Add Tab (`+` Button):** Creates a fresh template tab and immediately sets it as active.
+* **Tab Creation & Operations:**
+  * **Add Tab (`+` Button):** The **exclusive** entry point for creating new templates. Clicking `+` generates a new template, allocates its separate `localStorage` slot, and focuses it immediately.
+  * **Switch Tab:** Clicking any tab auto-saves the current template and loads the selected template's independent design into the canvas.
+  * **Close Tab (`X`):** Deletes the template and its storage slot, focusing an adjacent template.
 
 ---
 
 ### 2. Saved Templates Panel (`src/features/templates/components/SavedTemplatesPanel.tsx`)
-Spans the full width of the main scrollable workspace beneath the Editor Canvas and Properties Panel (`rounded-xl bg-white border border-slate-200/90 p-5`).
+Full-width container positioned at the bottom of the scrollable workspace:
 
 * **Header Section:**
   * **Icon & Title:** Folder icon (`Folder`) inside a blue rounded box + `"Saved Templates"` heading.
-  * **Subtitle:** `"Access and manage your saved templates."`
-  * **Save CTA:** `[+ Save Current as Template]` button (`border-blue-500 text-blue-600 bg-white hover:bg-blue-50/60`). Clicking this serializes the active canvas and stores it as a new template entry.
-* **Template Card Item:**
-  * **Document Icon & Details:** Blue square icon with `FileText`, template title (e.g., `"Template-1"`), and formatted timestamp (e.g., `Saved on 2026-09-14 | 10:32 AM`).
+  * **Subtitle:** Displays total templates count and creation hint.
+  * **Save CTA:** `[Save as Current Template]` button styled with clean outlined styling (`border border-blue-500 text-blue-600 bg-white hover:bg-blue-50/70`, `py-2 sm:py-2.5 px-3.5 sm:px-4`, and `<Save />` icon). Clicking this saves the active document state to its dedicated storage slot.
+* **Template Card Items:**
+  * **Document Icon & Details:** Blue square badge with `FileText`, template title, active badge indicator, and formatted timestamp (`Saved on YYYY-MM-DD | HH:MM AM/PM`).
   * **Actions:**
-    * `[ Open ]` Button: Hydrates the canvas and editor store with this template's saved state.
-    * `[ ⋮ ]` More Options (`MoreVertical`): Opens context menu for Rename, Duplicate, or Delete.
+    * `[ Open / Current ]` Button: Loads the template's independent data into the editor canvas and scrolls smoothly to the canvas.
+    * `[ Trash2 ]` Delete Button: Deletes the template and clears its `localStorage` slot.
 
 ---
 
-## Automatic Storage Flow & Hydration Lifecycle
+## Storage Architecture & Lifecycle
+
+Each template is completely isolated in `localStorage` to ensure independent editing:
 
 ```
-[ App Initialization / Mount ]
-            │
-            ▼
-┌──────────────────────────────────────────────┐
-│ Check localStorage.getItem("template1")     │
-└──────────────────────┬───────────────────────┘
-                       │
-          ┌────────────┴────────────┐
-          │                         │
-      (Found)                  (Not Found)
-          │                         │
-          ▼                         ▼
-┌──────────────────┐      ┌─────────────────────────────┐
-│ Parse JSON &     │      │ Hydrate Zustand store with  │
-│ Hydrate Canvas   │      │ hardcoded Default Template  │
-└──────────────────┘      └─────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ Master Templates List: "document_editor_templates_list"         │
+│ Contains: [{ id: "template-1", name: "Template-1" }, ...]      │
+│ Active ID: "template-1"                                        │
+└────────────────────────────────────────────────────────────────┘
+                 │                               │
+                 ▼                               ▼
+┌────────────────────────────────┐ ┌────────────────────────────────┐
+│ Key: "doc_template_data_template-1" │ │ Key: "doc_template_data_template-2" │
+│ DocumentStateSnapshot (JSON)   │ │ DocumentStateSnapshot (JSON)   │
+│ (Metadata, Pages, Blocks)      │ │ (Metadata, Pages, Blocks)      │
+└────────────────────────────────┘ └────────────────────────────────┘
 ```
 
 ### Step-by-Step Lifecycle Rules
 
-1. **Application Mount (First Boot vs. Returning User):**
-   * On initial load, the system inspects `localStorage` for the key `"template1"`.
-   * **If `"template1"` exists:** Parse the JSON payload and hydrate the Zustand `editorStore`. The user immediately sees their previously saved state.
-   * **If `"template1"` is missing:** Populate the store with the default Proof-of-Concept document (Company header, issuer/client metadata, 5 quotation line items).
+1. **Application Mount:**
+   - The system checks `localStorage` for `document_editor_templates_list`.
+   - The active template's dedicated payload is read from `doc_template_data_${activeTemplateId}` and hydrated into the canvas via `useEditorState.loadTemplate()`.
 
-2. **Saving State (`Save` or `Save Current as Template`):**
-   * Triggered by:
-     * Header `[ Save ]` button.
-     * Bottom panel `[+ Save Current as Template]` button.
-     * Keyboard shortcut (`Ctrl+S` / `Cmd+S`).
-   * **Action:**
-     * Serializes document metadata, table rows, and typography/table styling into the standardized JSON schema.
-     * Writes to `localStorage.setItem("template1", JSON.stringify(payload))`.
-     * Updates the `updatedAt` ISO timestamp and refreshes the template card in `SavedTemplatesPanel`.
+2. **Template Creation via `+` in `TabBar`:**
+   - Auto-saves current active template.
+   - Generates a new ID (e.g. `template-2`) and writes initial default document structure into `doc_template_data_template-2`.
+   - Appends to templates list, sets as active, and populates the canvas.
 
-3. **Hydration / Opening a Saved Template:**
-   * Clicking `[ Open ]` on any template card reads its payload and replaces active canvas state in the store.
+3. **Switching Templates:**
+   - Auto-saves the current template's latest canvas state to `doc_template_data_${activeTemplateId}`.
+   - Sets the new active ID and loads `doc_template_data_${targetId}` into the editor store.
+
+4. **Saving via "Save as Current Template":**
+   - Explicitly captures the canvas snapshot to `doc_template_data_${activeTemplateId}` and updates the `savedAt` timestamp in the master list.
 
 ---
 
-## JSON Storage Schema Contract
+## Data Contracts
 
 ```typescript
-export interface StoredTemplate {
-  id: string;                         // Unique ID (e.g., "template1", "tpl_1726396320")
-  name: string;                       // Display name (e.g., "Template-1")
-  createdAt: string;                  // ISO 8601 string
-  updatedAt: string;                  // ISO 8601 string
-  version: number;                    // Schema version for future migrations (e.g., 1)
-  data: {
-    metadata: {
-      projectName: string;
-      issuerDetails: string;
-      clientDetails: string;
-      documentNumber: string;
-      documentDate: string;
-    };
-    textStyles: {
-      fontFamily: string;
-      fontSize: number;
-      fontWeight: string;
-      color: string;
-      align: string;
-    };
-    tableStyles: {
-      width: number;
-      borderStyle: string;
-      padding: number;
-      rowSpacing: number;
-    };
-    tableRows: Array<{
-      id: string | number;
-      item: string;
-      qty: number;
-      unitPrice: number;
-      amount: number;
-    }>;
-  };
+export interface SavedTemplateItem {
+  id: string;
+  name: string;
+  savedAt: string;
+  data?: DocumentStateSnapshot;
+}
+
+export interface TemplatesStoreState {
+  templates: SavedTemplateItem[];
+  activeTemplateId: string;
+  tabCounter: number;
+
+  selectTemplate: (id: string) => void;
+  createTemplate: () => { newTemplate: SavedTemplateItem; data: DocumentStateSnapshot };
+  deleteTemplate: (id: string) => string;
+  saveCurrentTemplate: (data: DocumentStateSnapshot) => SavedTemplateItem;
+  getTemplateData: (id: string) => DocumentStateSnapshot;
+  saveTemplateData: (id: string, data: DocumentStateSnapshot) => void;
 }
 ```
-
----
-
-## Error Handling & Fallbacks
-
-* **JSON Parse Failures:** If `localStorage` data is corrupted or invalid, catch the error gracefully, log a warning in development, and fallback to the hardcoded default template without crashing the UI.
-* **Storage Quota Exceeded:** Wrap write operations in a `try...catch` block to handle browser `QuotaExceededError` scenarios and notify the user if local storage is full.

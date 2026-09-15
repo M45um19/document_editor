@@ -2,49 +2,77 @@
 
 import React from "react";
 import { FileText, X, Plus } from "lucide-react";
+import { TemplateTab } from "@/hooks/useTabBar";
 
-export function TabBar() {
+export type { TemplateTab };
+
+interface TabBarProps {
+  tabs: TemplateTab[];
+  activeTabId: string;
+  onSelectTab: (id: string) => void;
+  onAddTab: () => void;
+  onCloseTab: (id: string) => void;
+}
+
+export function TabBar({
+  tabs,
+  activeTabId,
+  onSelectTab,
+  onAddTab,
+  onCloseTab,
+}: TabBarProps) {
   return (
-    <div className="bg-[#eef2f7] border-b border-slate-200 px-2 sm:px-4 flex items-end gap-1 sm:gap-1.5 shrink-0 overflow-x-auto select-none pt-1.5 scrollbar-none">
-      {/* Active Tab: New-Template */}
-      <div className="flex items-center gap-2 sm:gap-3 bg-white px-3 sm:px-8 2xl:px-10 py-1.5 sm:py-2.5 rounded-t-md text-xs sm:text-sm font-semibold text-blue-600 border border-slate-200 border-b-white shadow-xs relative top-[1px] shrink-0">
-        <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
-        <span className="px-1 sm:px-2 whitespace-nowrap max-w-[100px] sm:max-w-none truncate">
-          New-Template
-        </span>
+    <div className="w-full h-10 sm:h-11 2xl:h-12 bg-[#eef2f7] border-b border-slate-200 px-2 sm:px-3 flex items-end shrink-0 select-none overflow-x-auto scrollbar-none">
+      <div className="flex items-end gap-1 sm:gap-1.5 min-w-0">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId;
+          return (
+            <div
+              key={tab.id}
+              onClick={() => onSelectTab(tab.id)}
+              className={`flex items-center gap-1.5 sm:gap-2.5 px-3 sm:px-6 2xl:px-8 h-8 sm:h-9 2xl:h-10 rounded-t-md text-xs sm:text-sm font-semibold transition shrink-0 cursor-pointer ${
+                isActive
+                  ? "bg-white text-blue-600 border border-slate-200 border-b-white shadow-xs relative top-[1px]"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+              }`}
+            >
+              <FileText
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
+                  isActive ? "text-blue-600" : "text-slate-500"
+                }`}
+              />
+              <span className="px-1 whitespace-nowrap max-w-[120px] sm:max-w-none truncate">
+                {tab.name}
+              </span>
+              <button
+                type="button"
+                aria-label={`Close ${tab.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCloseTab(tab.id);
+                }}
+                className={`ml-1 rounded p-0.5 transition ${
+                  isActive
+                    ? "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-300/60"
+                }`}
+              >
+                <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              </button>
+            </div>
+          );
+        })}
+
+        {/* Add Tab Button */}
         <button
           type="button"
-          aria-label="Close tab"
-          className="ml-1 sm:ml-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded p-0.5 sm:p-1 transition"
+          onClick={onAddTab}
+          aria-label="Add new template tab"
+          className="h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-md hover:bg-slate-200/70 text-slate-600 transition mb-0.5 ml-1 shrink-0 cursor-pointer"
         >
-          <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
-
-      {/* Inactive Tab: Template-1 */}
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-8 2xl:px-10 py-1.5 sm:py-2.5 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 rounded-t-md transition shrink-0 cursor-pointer">
-        <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
-        <span className="px-1 sm:px-2 whitespace-nowrap max-w-[100px] sm:max-w-none truncate">
-          Template-1
-        </span>
-        <button
-          type="button"
-          aria-label="Close tab"
-          className="ml-1 sm:ml-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded p-0.5 sm:p-1 transition"
-        >
-          <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-        </button>
-      </div>
-
-      {/* Add Tab Button */}
-      <button
-        type="button"
-        aria-label="Add new template tab"
-        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded hover:bg-slate-200/70 text-slate-600 transition mb-0.5 sm:mb-1 ml-1 shrink-0"
-      >
-        <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
     </div>
   );
 }
-
