@@ -20,16 +20,16 @@ The editor interface is structured into distinct functional zones designed for f
 │ • Components:     │ • Viewport Controls (A4 Badge, Zoom, Full)   │ • Context Typography:         │
 │   - Select        │ • Company Branding & Header                  │   - Target: Block / Cell      │
 │   - Text Block    │ • 3-Column Metadata Grid (Issuer, Client...) │   - Font Family / Size / Wt   │
-│   - Simple Table  │ • Page Grid Rows & Multi-Columns             │   - Color Picker / Alignment  │
-│   - Image Block   │ • Dynamic Blocks (Table, Text, Image, Shape) │ • Table Settings:             │
-│   - Shape Block   │ • In-Table Controls (+ Row, + Col, Del Col)  │   - Width / Borders / Padding │
+│   - Simple Table  │ • Page Grid Rows & Drag-Resizable Columns    │   - Color Picker / Alignment  │
+│   - Image Block   │ • Clean Idle View vs. Hover/Select Controls  │ • Table Settings:             │
+│   - Shape Block   │ • Dynamic Blocks (Table, Text, Image, Shape) │   - Width / Borders / Padding │
 │ • Quick Actions   │ • Multi-Page Continuation & Row Splitting    │ • Page Grid Management:       │
 │ • Pages Manager   │ • Visual Footer Graphic                      │   - Row / Column Add & Delete │
 ├───────────────────┴──────────────────────────────────────────────┴───────────────────────────────┤
 │ Bottom Section: Saved Templates Panel (Full width under Canvas + Properties)                     │
 │ • "Save as Current Template" Outlined CTA                                                        │
 │ • Template Cards (Title, Active Badge, Saved Timestamp, "Open / Current" Action, Delete Action) │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+│ └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -38,7 +38,7 @@ The editor interface is structured into distinct functional zones designed for f
 
 | Guide | Target Feature Folder | Key Responsibilities |
 | :--- | :--- | :--- |
-| **[Editor Feature Guide](./editor.md)** | `src/features/editor/` | Component Toolbox, Dynamic Canvas Blocks, Multi-Page A4 Engine with Table Row Splitting, Inline & Cell Typography, and Page Grid Layout Management. |
+| **[Editor Feature Guide](./editor.md)** | `src/features/editor/` | Component Toolbox, Dynamic Canvas Blocks, Multi-Page A4 Engine with Table Row Splitting, Inline & Cell Typography, Page Grid Layout Management, and Interactive Column Drag-Resizing. |
 | **[Templates Feature Guide](./templates.md)** | `src/features/templates/` | Multi-template tab synchronization, distinct per-template LocalStorage slots (`doc_template_data_<id>`), and Saved Templates Panel. |
 | **[Export Feature Guide](./export.md)** | `src/features/export/` | Client-side PDF generation via `html2canvas` and `jspdf`, multi-page pagination, visual styling fidelity, and download pipelines. |
 
@@ -55,18 +55,26 @@ The editor interface is structured into distinct functional zones designed for f
    - Document sheets render in standard A4 dimensions (`210mm × 297mm` / `max-w-[794px] min-h-[1123px]`).
    - Dynamic pagination automatically splits tables and layout blocks across pages when overflowing, and seamlessly pulls them back when content shrinks.
 
-3. **Strict TypeScript & Zero Warnings:**
+3. **Interactive Column Border Resizing:**
+   - Grid rows support fluid percentage column widths with drag-to-resize divider handles between adjacent columns.
+   - Real-time drag calculation ensures adjacent columns shift seamlessly while respecting an 8% minimum width bound.
+
+4. **Clean Idle Display & Progressive Disclosure:**
+   - Unselected and unhovered documents render clean and natural (like a final printed document).
+   - In-table action buttons (`+ Add Row`, `+ Add Column`), drag handles, row headers, and divider lines are progressively disclosed on hover and pinned on active selection.
+
+5. **Strict TypeScript & Zero Warnings:**
    - `noImplicitAny: true` is enforced across the entire codebase.
    - **Zero `any` types** and zero ESLint warnings across components, hooks, and types.
 
-4. **Per-Template Storage Isolation:**
+6. **Per-Template Storage Isolation:**
    - Each template maintains its own distinct `localStorage` slot (`doc_template_data_${templateId}`).
    - Editing one template's design, pages, or metadata never pollutes or overwrites another template.
    - New templates are created exclusively via the `+` button in `TabBar.tsx`.
 
-5. **SSR Hydration Safety:**
+7. **SSR Hydration Safety:**
    - Uses `useMounted()` guards in page and canvas entry points to prevent Next.js server-side singleton state divergence.
 
-6. **Responsive Layout Discipline:**
+8. **Responsive Layout Discipline:**
    - The workspace layout uses flexbox and viewport height constraints (`h-screen`, `h-[100dvh]`, `overflow-hidden` at the root with independent scrolling in the workspace and sidebars).
    - Component dimensions scale seamlessly across standard breakpoints (`sm`, `md`, `lg`, `xl`, `2xl`, `3xl`).
