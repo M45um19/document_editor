@@ -1,7 +1,7 @@
 # Feature Guide: Visual Editor & Canvas
 
 ## Overview
-The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, dynamic page grid layout management, and real-time styling controls via the properties sidebar.
+The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, dynamic page grid layout management, interactive column border drag-resizing, and real-time styling controls via the properties sidebar.
 
 ---
 
@@ -15,12 +15,12 @@ src/
 └── features/editor/
     ├── components/
     │   ├── ComponentToolbox.tsx   # Left dark sidebar (Tools, Quick Add, Page Thumbnails)
-    │   ├── EditorCanvas.tsx       # Center white sheet on slate canvas with A4 auto-pagination
+    │   ├── EditorCanvas.tsx       # Center white sheet on slate canvas with A4 auto-pagination & drag-resizers
     │   └── PropertiesPanel.tsx    # Right properties sidebar (Typography, Page Grid & Table controls)
     ├── hooks/
-    │   └── useEditorState.ts      # Central Zustand store for editor domain state & auto-persistence
+    │   └── useEditorState.ts      # Central Zustand store for editor domain state, column widths & auto-persistence
     └── types/
-        └── index.ts               # Domain types for blocks, tables, pages, metadata, and styling
+        └── index.ts               # Domain types for blocks, tables, pages, metadata, column widths, and styling
 ```
 
 ---
@@ -70,17 +70,21 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
   * Fullscreen maximize toggle (`Maximize2`).
 * **Document Sheet Container (`#document-sheet`):**
   * Exact standard A4 dimensions (`max-w-[794px] min-h-[1123px]`).
+  * Clicking the blank document sheet clears active selection and resets canvas to clean document mode.
   * **Page 1 Branding Header:** Logo mark, editable company name (`"Your Company"`), tagline, compact document title (`"VISUAL DOCUMENT"`), and accent divider line.
   * **Page Grid Layout Rows:** Document content is structured into multi-column grid rows (`layoutRows: PageGridRow[]`):
     * **Row 1 (Metadata Row):** 3 columns housing editable `TextBlock` elements for `ISSUER/\nIssuer Details`, `Client Details`, and `No/Date: C-2026-061\n2026-09-14` (right-aligned), fully customizable via row/column management and typography controls.
     * **Row 2 (Table Row):** 1 column housing the `QUOTATION ITEMS` table.
     * **Custom Continuation Rows:** Each row contains 1 or more columns (`columns: PageGridColumn[]`), and each column houses modular blocks or quick element add triggers (`+ Text`, `+ Table`, `+ Image`, `+ Divider`).
-  * **Dynamic Canvas Blocks:**
-    * **Table Block:** Inline column headers with customizable labels and types, editable row cells, in-table `[+ Add Row]`, `[+ Add Col]`, and `[Del Col]` controls, auto-computed `Amount` column (`qty * unitPrice`), cell-specific typography styling, and delete table action.
-    * **Text Block:** Zero-padding unobtrusive display when unselected; displays active blue selection border and editor controls when focused. Supports auto-expanding multiline text and custom typography.
-    * **Image Block:** Responsive media container with caption.
-    * **Shape Block:** Vibrant multi-stop gradient divider line.
-  * **Canvas Footer:** Page counter note + 3-bar skewed graphic.
+* **Draggable Column Border Resizing:**
+  * Draggable resize handles (`cursor-col-resize`) sit between adjacent column pairs.
+  * Adjusting a divider line recalculates the left and right column percentage widths in real time (`handleResizeMouseDown`).
+  * Enforces an `8%` minimum column width boundary to prevent column collapse.
+  * Adjacent columns dynamically realign without breaking document flow.
+* **Idle vs. Hover vs. Selection Visual Modes:**
+  * **Idle Mode (Unselected & Unhovered):** Document renders pristine and clean like a printed PDF. Table cell inputs are transparent and borderless without blue input boxes. Table action buttons (`+ Add Row`, `+ Add Col`, drag handles, bottom actions), row headers, and column divider lines remain invisible (`opacity-0 pointer-events-none`).
+  * **Hover Mode:** Hovering over a table or grid row smoothly fades in all edit action buttons, row drag handles, and draggable divider lines (`group-hover:opacity-100`).
+  * **Selected Mode:** Clicking a block, cell, or grid row pins controls and active highlight halos (`border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10`) visible. Focused table cells receive active focus rings (`ring-2 ring-blue-500/40 bg-white`).
 
 ---
 
@@ -100,8 +104,31 @@ Right sidebar (`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px]`, white background, b
 * **Table Settings:**
   * Width, Border style (`1px Solid #E5E7EB`), Padding (`0px`), and Row Spacing (`1px`).
 * **Page Grid Column & Row Management (Layout Level):**
-  * **Column Management:** `[+ Add Column]` and `[Delete Column]` to manage columns within the active Page Grid Row (e.g. creating 3 columns for Issuer, Client, Date).
+  * **Column Management:** `[+ Add Column]` and `[Delete Column]` to manage columns within the active Page Grid Row. Adding or removing columns automatically normalizes percentage widths across all columns to sum to 100%.
   * **Row Management:** `[+ Add Row]` and `[Delete Row]` to manage layout grid rows on the active document page.
+
+---
+
+## Interactive Column Resizing System
+
+The grid layout allows flexible column widths using fluid percentage values:
+
+1. **State Representation:**
+   - Each column in `PageGridColumn` carries an optional `width?: number` (percentage value, e.g. `20` for 20%).
+   - If not explicitly set, columns default to equal shares (`Math.round(100 / colCount * 10) / 10`).
+
+2. **Drag Resizing Physics (`EditorCanvas.tsx`):**
+   - On `mousedown` over the resize divider handle between column $i$ and column $i+1$:
+     - Measures the parent row width in pixels ($W_{px}$).
+     - Calculates delta percentage: $\Delta\% = \frac{\Delta x}{W_{px}} \times 100$.
+     - Computes $W_{left}' = W_{left} + \Delta\%$ and $W_{right}' = W_{right} - \Delta\%$.
+     - Constrains both widths to $\ge 8\%$ minimum limit.
+     - Commits updated widths via `updateRowColumnWidths(pageNum, rowId, updatedWidths)`.
+   - Displays real-time tooltip badge with the rounded percentage width (e.g., `35%`).
+
+3. **Auto-Rebalancing:**
+   - When `addPageColumn` is called, all columns in the row are re-normalized equally (e.g., 5 columns = 20% each).
+   - When `deletePageColumn` is called, remaining columns scale proportionally to fill 100% width.
 
 ---
 
@@ -226,7 +253,7 @@ export type CanvasBlock = TableBlock | TextBlock | ImageBlock | ShapeBlock;
 
 export interface PageGridColumn {
   id: string;
-  width?: string; // e.g. "1fr", "2fr", "auto"
+  width?: number; // percentage width of the row (e.g. 20 for 20%, 33.3 for 33.3%)
   blocks: CanvasBlock[];
 }
 

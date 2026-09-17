@@ -55,6 +55,11 @@ export interface EditorStoreState {
   deletePageRow: (pageNumber: number, rowId?: string) => void;
   addPageColumn: (pageNumber: number, rowId?: string) => void;
   deletePageColumn: (pageNumber: number, rowId?: string, columnId?: string) => void;
+  updateRowColumnWidths: (
+    pageNumber: number,
+    rowId: string,
+    columnWidths: { id: string; width: number }[]
+  ) => void;
 
   // Component insertion with auto-pagination
   addElement: (type: "text" | "table" | "image" | "shape") => void;
@@ -672,15 +677,18 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
     set((state) => {
       const targetRowId = rowId || state.selectedRowId;
       const newColId = `col-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const newCol: PageGridColumn = { id: newColId, blocks: [] };
 
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => {
           if (r.id === targetRowId || (!targetRowId && currentRows[0]?.id === r.id)) {
+            const newTotalCount = r.columns.length + 1;
+            const equalWidth = Math.round((100 / newTotalCount) * 10) / 10;
+            const existingRebalanced = r.columns.map((c) => ({ ...c, width: equalWidth }));
+            const newCol: PageGridColumn = { id: newColId, blocks: [], width: equalWidth };
             return {
               ...r,
-              columns: [...r.columns, newCol],
+              columns: [...existingRebalanced, newCol],
             };
           }
           return r;
@@ -713,9 +721,18 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
             if (r.columns.length <= 1) return r;
             const targetColId =
               columnId || state.selectedColumnId || r.columns[r.columns.length - 1].id;
+            const remaining = r.columns.filter((c) => c.id !== targetColId);
+            const totalWidth = remaining.reduce((sum, c) => sum + (c.width || 0), 0);
+            const rebalanced = remaining.map((c) => ({
+              ...c,
+              width:
+                totalWidth > 0
+                  ? Math.round(((c.width || 100 / remaining.length) / totalWidth) * 1000) / 10
+                  : Math.round((100 / remaining.length) * 10) / 10,
+            }));
             return {
               ...r,
-              columns: r.columns.filter((c) => c.id !== targetColId),
+              columns: rebalanced,
             };
           }
           return r;
@@ -730,6 +747,34 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       const reflowed = reflowPages(updatedPages);
       autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
       return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+    });
+  },
+
+  updateRowColumnWidths: (pageNumber, rowId, columnWidths) => {
+    set((state) => {
+      const widthMap = new Map(columnWidths.map((cw) => [cw.id, cw.width]));
+      const updatedPages = state.pages.map((p) => {
+        const currentRows = getPageLayoutRows(p);
+        const updatedRows = currentRows.map((r) => {
+          if (r.id === rowId) {
+            const updatedCols = r.columns.map((col) => {
+              if (widthMap.has(col.id)) {
+                return { ...col, width: widthMap.get(col.id) };
+              }
+              return col;
+            });
+            return { ...r, columns: updatedCols };
+          }
+          return r;
+        });
+        return {
+          ...p,
+          layoutRows: updatedRows,
+          blocks: extractAllBlocksFromRows(updatedRows),
+        };
+      });
+      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
+      return { pages: updatedPages };
     });
   },
 
