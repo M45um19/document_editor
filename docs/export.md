@@ -57,23 +57,23 @@ src/
 ## Technical Requirements & Implementation Details
 
 ### 1. Canvas Targeting & DOM Selection
-* The document canvas sheet in `src/features/editor/components/EditorCanvas.tsx` is marked with a distinct ID or `ref`:
+* The document canvas sheet in `src/features/editor/components/EditorCanvas.tsx` is marked with a distinct ID:
   ```tsx
-  <div id="document-sheet" className="w-full bg-white rounded-lg shadow-sm ...">
-    {/* Full document layout */}
+  <div id="document-sheet" className="w-full max-w-[794px] min-h-[1123px] bg-white rounded-lg shadow-sm ...">
+    {/* Full document layout across A4 pages */}
   </div>
   ```
-* The export service captures the target element while temporarily stripping out non-printable editor UI chrome (e.g., drag handles `⋮⋮`, row selection halos, or hover indicators).
+* The export service captures the target element while temporarily stripping out non-printable editor UI chrome (e.g., in-table row/column management buttons, active cell selection halos, or hover indicators).
 
 ### 2. High-DPI Resolution & Scale
 * When invoking `html2canvas`, enforce a scale multiplier (minimum `scale: 2` or `window.devicePixelRatio >= 2`) to ensure crisp text and sharp lines in the resulting PDF.
 * Maintain exact CSS box-model fidelity, including borders (`1px solid #E5E7EB`), background fills (`bg-blue-50/70`), and SVG logo marks.
 
-### 3. Dimensions & Pagination
+### 3. Standard A4 Dimensions & Multi-Page Pagination
 * Target standard **A4 portrait dimensions** (`210mm x 297mm` / `595.28pt x 841.89pt`).
-* If a document contains multiple pages or extended table rows:
-  * Iterate across document page containers.
-  * Compute page-break offsets to prevent splitting table rows in half.
+* When a document contains multiple pages (with split tables and continuation sheets):
+  * Iterate across all document page containers (`Page 1`, `Page 2`...).
+  * Capture each page at precise A4 proportions.
   * Append pages sequentially using `doc.addPage()`.
 
 ### 4. File Naming Convention
@@ -81,8 +81,8 @@ src/
   ```text
   [Sanitized_Project_Name]_[YYYY-MM-DD].pdf
   ```
-* Example: For a project named `"Document Project V1"` on `2026-09-15`, the resulting file will download as:
-  `Document_Project_V1_2026-09-15.pdf`
+* Example: For a project named `"Document Project V1"` on `2026-09-17`, the resulting file will download as:
+  `Document_Project_V1_2026-09-17.pdf`
 
 ---
 
@@ -114,6 +114,6 @@ export interface ExportState {
 
 ## Edge Cases & Reliability Checklist
 
-1. **Custom Web Fonts:** Ensure Google Fonts (e.g. `Inter`) are fully loaded before triggering `html2canvas` capture to prevent system font fallback.
-2. **Color Profile Accuracy:** Verify that modern CSS colors (such as HSL or Tailwind color variables) render consistently in sRGB canvas color space.
+1. **Custom Web Fonts:** Ensure Google Fonts (Inter, Roboto, Outfit, Playfair Display, Merriweather, Fira Code) are fully loaded before triggering canvas capture to prevent system font fallback.
+2. **Color Profile Accuracy:** Verify that modern CSS colors render consistently in sRGB canvas color space.
 3. **Download Feedback:** While `isExporting` is active, display a loading spinner on the `[ Download PDF ]` header button and temporarily disable clicks to prevent duplicate downloads.
