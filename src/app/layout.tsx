@@ -1,10 +1,44 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import {
+  Inter,
+  Roboto,
+  Outfit,
+  Playfair_Display,
+  Merriweather,
+  Fira_Code,
+} from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const roboto = Roboto({
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+  variable: "--font-roboto",
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+});
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair",
+});
+
+const merriweather = Merriweather({
+  weight: ["300", "400", "700"],
+  subsets: ["latin"],
+  variable: "--font-merriweather",
+});
+
+const firaCode = Fira_Code({
+  subsets: ["latin"],
+  variable: "--font-fira",
 });
 
 export const metadata: Metadata = {
@@ -18,7 +52,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${roboto.variable} ${outfit.variable} ${playfair.variable} ${merriweather.variable} ${firaCode.variable} h-full antialiased`}
+    >
       <body className="min-h-screen bg-[#f3f4f8] text-slate-800 font-sans flex flex-col">{children}</body>
     </html>
   );
