@@ -18,7 +18,111 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
   pages: [
     {
       pageNumber: 1,
+      layoutRows: [
+        {
+          id: "page-row-meta",
+          columns: [
+            {
+              id: "col-meta-issuer",
+              blocks: [
+                {
+                  id: "meta-block-issuer",
+                  type: "text",
+                  content: "ISSUER/\nIssuer Details",
+                  fontFamily: "Inter",
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#1e293b",
+                  align: "left",
+                },
+              ],
+            },
+            {
+              id: "col-meta-client",
+              blocks: [
+                {
+                  id: "meta-block-client",
+                  type: "text",
+                  content: "Client Details",
+                  fontFamily: "Inter",
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#1e293b",
+                  align: "left",
+                },
+              ],
+            },
+            {
+              id: "col-meta-nodate",
+              blocks: [
+                {
+                  id: "meta-block-nodate",
+                  type: "text",
+                  content: "No/Date:  C-2026-061\n2026-09-14",
+                  fontFamily: "Inter",
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#1e293b",
+                  align: "right",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "page-row-table",
+          columns: [
+            {
+              id: "col-table-main",
+              blocks: [
+                {
+                  id: "initial-table-1",
+                  type: "table",
+                  title: "QUOTATION ITEMS",
+                  rows: [
+                    { id: 1, item: "Product A", qty: 2, unitPrice: "$10.00", amount: "$20.00" },
+                    { id: 2, item: "Product B", qty: 3, unitPrice: "$10.00", amount: "$45.00" },
+                    { id: 3, item: "Product B", qty: 1, unitPrice: "$15.00", amount: "$45.00" },
+                    { id: 4, item: "Product C", qty: 1, unitPrice: "$50.00", amount: "$50.00" },
+                    { id: 5, item: "Product D", qty: 5, unitPrice: "$8.00", amount: "$40.00" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
       blocks: [
+        {
+          id: "meta-block-issuer",
+          type: "text",
+          content: "ISSUER/\nIssuer Details",
+          fontFamily: "Inter",
+          fontSize: 13,
+          fontWeight: "600",
+          color: "#1e293b",
+          align: "left",
+        },
+        {
+          id: "meta-block-client",
+          type: "text",
+          content: "Client Details",
+          fontFamily: "Inter",
+          fontSize: 13,
+          fontWeight: "600",
+          color: "#1e293b",
+          align: "left",
+        },
+        {
+          id: "meta-block-nodate",
+          type: "text",
+          content: "No/Date:  C-2026-061\n2026-09-14",
+          fontFamily: "Inter",
+          fontSize: 13,
+          fontWeight: "600",
+          color: "#1e293b",
+          align: "right",
+        },
         {
           id: "initial-table-1",
           type: "table",

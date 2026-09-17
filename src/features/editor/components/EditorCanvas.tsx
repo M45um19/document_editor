@@ -12,17 +12,70 @@ import {
   ImageIcon,
   Shapes,
   X,
-  FileText,
 } from "lucide-react";
 import { useMounted } from "@/hooks/useMounted";
-import { useEditorState } from "../hooks/useEditorState";
+import { useEditorState, getPageLayoutRows } from "../hooks/useEditorState";
 import {
   TableBlock,
   TextBlock,
   ImageBlock,
   ShapeBlock,
   CanvasBlock,
+  TableRowItem,
+  TableColumn,
+  DEFAULT_TABLE_COLUMNS,
+  FONT_FAMILY_MAP,
 } from "../types";
+
+interface AutoExpandingTextareaProps {
+  value: string;
+  onFocus?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  style?: React.CSSProperties;
+  className?: string;
+  placeholder?: string;
+}
+
+function AutoExpandingTextarea({
+  value,
+  onFocus,
+  onClick,
+  onChange,
+  style,
+  className,
+  placeholder,
+}: AutoExpandingTextareaProps) {
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const resize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.max(22, textareaRef.current.scrollHeight)}px`;
+    }
+  };
+
+  React.useEffect(() => {
+    resize();
+  }, [value, style?.fontSize, style?.fontFamily, style?.fontWeight]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onFocus={onFocus}
+      onClick={onClick}
+      onChange={(e) => {
+        onChange(e);
+        resize();
+      }}
+      rows={1}
+      style={style}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+}
 
 export function EditorCanvas() {
   const isMounted = useMounted();
@@ -35,12 +88,28 @@ export function EditorCanvas() {
   const setZoomLevel = useEditorState((s) => s.setZoomLevel);
   const toggleFullscreen = useEditorState((s) => s.toggleFullscreen);
 
+  const selectedBlockId = useEditorState((s) => s.selectedBlockId);
+  const setSelectedBlockId = useEditorState((s) => s.setSelectedBlockId);
+  const selectedCell = useEditorState((s) => s.selectedCell);
+  const setSelectedCell = useEditorState((s) => s.setSelectedCell);
+  const selectedRowId = useEditorState((s) => s.selectedRowId);
+  const setSelectedRowId = useEditorState((s) => s.setSelectedRowId);
+  const selectedColumnId = useEditorState((s) => s.selectedColumnId);
+  const setSelectedColumnId = useEditorState((s) => s.setSelectedColumnId);
+
   const updateTextBlock = useEditorState((s) => s.updateTextBlock);
   const updateTableRow = useEditorState((s) => s.updateTableRow);
   const addTableRow = useEditorState((s) => s.addTableRow);
   const deleteTableRow = useEditorState((s) => s.deleteTableRow);
+  const addTableColumn = useEditorState((s) => s.addTableColumn);
+  const deleteTableColumn = useEditorState((s) => s.deleteTableColumn);
+
+  const addPageRow = useEditorState((s) => s.addPageRow);
+  const deletePageRow = useEditorState((s) => s.deletePageRow);
+  const addPageColumn = useEditorState((s) => s.addPageColumn);
+  const deletePageColumn = useEditorState((s) => s.deletePageColumn);
+  const addElementToColumn = useEditorState((s) => s.addElementToColumn);
   const removeElement = useEditorState((s) => s.removeElement);
-  const addElement = useEditorState((s) => s.addElement);
 
   if (!isMounted) {
     return (
@@ -59,10 +128,66 @@ export function EditorCanvas() {
     switch (block.type) {
       case "table": {
         const tableBlock = block as TableBlock;
+        const isSelected = selectedBlockId === tableBlock.id;
+        const fontFamily = tableBlock.fontFamily || "Inter";
+        const fontSize = tableBlock.fontSize ? `${tableBlock.fontSize}px` : "14px";
+        const color = tableBlock.color || "#1f2937";
+        const columns: TableColumn[] =
+          tableBlock.columns && tableBlock.columns.length > 0
+            ? tableBlock.columns
+            : DEFAULT_TABLE_COLUMNS;
+
+        const isCellSelected = (rowId: number, colId: string) => {
+          return (
+            selectedCell?.blockId === tableBlock.id &&
+            selectedCell?.rowId === rowId &&
+            selectedCell?.columnKey === colId
+          );
+        };
+
+        const handleCellFocus = (rowId: number, colId: string) => {
+          setSelectedBlockId(tableBlock.id);
+          setSelectedCell({ blockId: tableBlock.id, rowId, columnKey: colId });
+        };
+
+        const getEffectiveCellStyle = (
+          row: TableRowItem,
+          colId: string,
+          defaultAlign?: "left" | "center" | "right"
+        ) => {
+          const cellStyle = row.cellStyles?.[colId] || {};
+          const effectiveFontFamily = cellStyle.fontFamily || tableBlock.fontFamily || "Inter";
+          const effectiveFontSize = cellStyle.fontSize ?? tableBlock.fontSize ?? 14;
+          const effectiveFontWeight = cellStyle.fontWeight || tableBlock.fontWeight || "400";
+          const effectiveColor = cellStyle.color || tableBlock.color || "#1f2937";
+          const effectiveAlign =
+            cellStyle.align ||
+            defaultAlign ||
+            (colId === "qty" || colId === "unitPrice"
+              ? "center"
+              : colId === "amount"
+              ? "right"
+              : tableBlock.align || "left");
+
+          return {
+            fontFamily:
+              FONT_FAMILY_MAP[effectiveFontFamily] || "var(--font-inter), Inter, sans-serif",
+            fontSize: `${effectiveFontSize}px`,
+            fontWeight: effectiveFontWeight,
+            color: effectiveColor,
+            textAlign: effectiveAlign as "left" | "center" | "right",
+          };
+        };
+
         return (
           <div
             key={tableBlock.id}
-            className="border border-slate-200/80 rounded-xl p-3 sm:p-4 md:p-5 bg-white space-y-3 sm:space-y-3.5 relative group shadow-2xs"
+            onClick={() => setSelectedBlockId(tableBlock.id)}
+            className={`border rounded-xl p-3 sm:p-4 md:p-5 bg-white space-y-3 sm:space-y-3.5 relative group shadow-2xs transition-all cursor-default ${
+              isSelected
+                ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10 shadow-xs"
+                : "border-slate-200/80 hover:border-slate-300"
+            }`}
           >
             {/* Table Header Controls */}
             <div className="flex items-center justify-between gap-2">
@@ -73,20 +198,54 @@ export function EditorCanvas() {
                 <h3 className="text-xs sm:text-sm md:text-base font-bold text-slate-800 tracking-wide uppercase truncate">
                   {tableBlock.title}
                 </h3>
+                {/* Styling summary badge */}
+                <div className="hidden xs:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200/90 text-[10px] text-slate-500 font-medium shadow-2xs">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 border border-slate-300"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="truncate max-w-[80px]">{fontFamily}</span>
+                  <span>•</span>
+                  <span>{fontSize}</span>
+                  <span>•</span>
+                  <span>{columns.length} Cols</span>
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {isSelected && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                    Selected
+                  </span>
+                )}
                 <button
                   type="button"
-                  onClick={() => addTableRow(pageNum, tableBlock.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addTableRow(pageNum, tableBlock.id);
+                  }}
                   className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
                 >
-                  <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Add Row</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => removeElement(pageNum, tableBlock.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addTableColumn(pageNum, tableBlock.id);
+                  }}
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Column</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeElement(pageNum, tableBlock.id);
+                  }}
                   aria-label="Delete table section"
                   className="p-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
                 >
@@ -102,10 +261,20 @@ export function EditorCanvas() {
                   <tr className="bg-slate-50/80 text-slate-700 text-xs sm:text-sm font-bold border-y border-slate-200/80">
                     <th className="py-2.5 sm:py-3 px-1 w-8 text-center" />
                     <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-10 sm:w-12 text-center">#</th>
-                    <th className="py-2.5 sm:py-3 px-2 sm:px-3">Item Detail</th>
-                    <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-16 sm:w-20 text-center">Qty</th>
-                    <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-24 sm:w-28 text-center">Unit Price</th>
-                    <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-24 sm:w-28 text-right">Amount</th>
+                    {columns.map((col) => (
+                      <th
+                        key={col.id}
+                        className={`py-2.5 sm:py-3 px-2 sm:px-3 ${col.width || ""} ${
+                          col.align === "center"
+                            ? "text-center"
+                            : col.align === "right"
+                            ? "text-right"
+                            : "text-left"
+                        }`}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="text-xs sm:text-sm divide-y divide-slate-100">
@@ -121,58 +290,145 @@ export function EditorCanvas() {
                         {index + 1}
                       </td>
 
-                      {/* Item Detail Input */}
-                      <td className="py-2 sm:py-2.5 px-2 sm:px-3">
-                        <input
-                          type="text"
-                          value={row.item}
-                          onChange={(e) =>
-                            updateTableRow(pageNum, tableBlock.id, row.id, "item", e.target.value)
-                          }
-                          className="bg-blue-50/60 border border-blue-100 rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 font-medium text-slate-800 w-full text-xs sm:text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </td>
+                      {/* Dynamic Columns Rendering */}
+                      {columns.map((col) => {
+                        const isSelectedCell = isCellSelected(row.id, col.id);
+                        const cellStyle = getEffectiveCellStyle(row, col.id, col.align);
 
-                      {/* Quantity Input */}
-                      <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">
-                        <input
-                          type="number"
-                          value={row.qty}
-                          onChange={(e) =>
-                            updateTableRow(
-                              pageNum,
-                              tableBlock.id,
-                              row.id,
-                              "qty",
-                              Number(e.target.value) || 0
-                            )
-                          }
-                          className="bg-blue-50/60 border border-blue-100 rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 font-medium text-slate-800 text-center text-xs sm:text-sm outline-none focus:ring-1 focus:ring-blue-500 w-14 sm:w-16 mx-auto"
-                        />
-                      </td>
+                        if (col.id === "item") {
+                          return (
+                            <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3">
+                              <input
+                                type="text"
+                                value={row.item ?? ""}
+                                onFocus={() => handleCellFocus(row.id, col.id)}
+                                onClick={() => handleCellFocus(row.id, col.id)}
+                                onChange={(e) =>
+                                  updateTableRow(
+                                    pageNum,
+                                    tableBlock.id,
+                                    row.id,
+                                    "item",
+                                    e.target.value
+                                  )
+                                }
+                                style={cellStyle}
+                                className={`bg-blue-50/60 border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
+                                  isSelectedCell
+                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white"
+                                    : "border-blue-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white"
+                                }`}
+                              />
+                            </td>
+                          );
+                        }
 
-                      {/* Unit Price Input */}
-                      <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center font-medium text-slate-700 text-xs sm:text-sm">
-                        <input
-                          type="text"
-                          value={row.unitPrice}
-                          onChange={(e) =>
-                            updateTableRow(
-                              pageNum,
-                              tableBlock.id,
-                              row.id,
-                              "unitPrice",
-                              e.target.value
-                            )
-                          }
-                          className="bg-transparent text-center font-medium text-slate-700 text-xs sm:text-sm outline-none border-b border-transparent hover:border-slate-300 focus:border-blue-500 w-16 sm:w-20"
-                        />
-                      </td>
+                        if (col.id === "qty") {
+                          return (
+                            <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">
+                              <input
+                                type="number"
+                                value={row.qty ?? 0}
+                                onFocus={() => handleCellFocus(row.id, col.id)}
+                                onClick={() => handleCellFocus(row.id, col.id)}
+                                onChange={(e) =>
+                                  updateTableRow(
+                                    pageNum,
+                                    tableBlock.id,
+                                    row.id,
+                                    "qty",
+                                    Number(e.target.value) || 0
+                                  )
+                                }
+                                style={cellStyle}
+                                className={`bg-blue-50/60 border rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
+                                  isSelectedCell
+                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white"
+                                    : "border-blue-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white"
+                                }`}
+                              />
+                            </td>
+                          );
+                        }
 
-                      {/* Amount */}
-                      <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-right font-bold text-slate-800 text-xs sm:text-sm">
-                        {row.amount}
-                      </td>
+                        if (col.id === "unitPrice") {
+                          return (
+                            <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">
+                              <input
+                                type="text"
+                                value={row.unitPrice ?? ""}
+                                onFocus={() => handleCellFocus(row.id, col.id)}
+                                onClick={() => handleCellFocus(row.id, col.id)}
+                                onChange={(e) =>
+                                  updateTableRow(
+                                    pageNum,
+                                    tableBlock.id,
+                                    row.id,
+                                    "unitPrice",
+                                    e.target.value
+                                  )
+                                }
+                                style={cellStyle}
+                                className={`bg-transparent text-center outline-none border-b w-16 sm:w-20 transition-all ${
+                                  isSelectedCell
+                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/50 rounded px-1"
+                                    : "border-transparent hover:border-slate-300 focus:border-blue-500"
+                                }`}
+                              />
+                            </td>
+                          );
+                        }
+
+                        if (col.id === "amount") {
+                          return (
+                            <td
+                              key={col.id}
+                              onClick={() => handleCellFocus(row.id, col.id)}
+                              style={cellStyle}
+                              className={`py-2 sm:py-2.5 px-2 sm:px-3 text-right cursor-pointer rounded transition-all ${
+                                isSelectedCell
+                                  ? "ring-2 ring-blue-500/40 bg-blue-50/60 font-semibold"
+                                  : "hover:bg-slate-100/60"
+                              }`}
+                            >
+                              {row.amount}
+                            </td>
+                          );
+                        }
+
+                        // Custom dynamic column
+                        const cellValue = row[col.id];
+                        const displayVal =
+                          typeof cellValue === "string" || typeof cellValue === "number"
+                            ? cellValue
+                            : "";
+
+                        return (
+                          <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3">
+                            <input
+                              type="text"
+                              value={displayVal}
+                              onFocus={() => handleCellFocus(row.id, col.id)}
+                              onClick={() => handleCellFocus(row.id, col.id)}
+                              onChange={(e) =>
+                                updateTableRow(
+                                  pageNum,
+                                  tableBlock.id,
+                                  row.id,
+                                  col.id,
+                                  e.target.value
+                                )
+                              }
+                              style={cellStyle}
+                              className={`bg-blue-50/60 border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
+                                isSelectedCell
+                                  ? "border-blue-500 ring-2 ring-blue-500/40 bg-white"
+                                  : "border-blue-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white"
+                              }`}
+                            />
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -180,23 +436,42 @@ export function EditorCanvas() {
             </div>
 
             {/* Bottom table actions */}
-            <div className="pt-1 sm:pt-2 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => addTableRow(pageNum, tableBlock.id)}
-                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Row</span>
-              </button>
+            <div className="pt-1 sm:pt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => addTableRow(pageNum, tableBlock.id)}
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Row</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addTableColumn(pageNum, tableBlock.id)}
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Column</span>
+                </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => deleteTableRow(pageNum, tableBlock.id)}
-                className="text-xs text-slate-400 hover:text-red-500 transition px-2 py-1 cursor-pointer"
-              >
-                Delete Last Row
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => deleteTableColumn(pageNum, tableBlock.id)}
+                  className="text-xs text-slate-400 hover:text-red-500 transition px-2 py-1 cursor-pointer"
+                >
+                  Delete Last Column
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteTableRow(pageNum, tableBlock.id)}
+                  className="text-xs text-slate-400 hover:text-red-500 transition px-2 py-1 cursor-pointer"
+                >
+                  Delete Last Row
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -204,30 +479,101 @@ export function EditorCanvas() {
 
       case "text": {
         const textBlock = block as TextBlock;
+        const isSelected = selectedBlockId === textBlock.id;
+        const fontFamily = textBlock.fontFamily || "Inter";
+        const fontSize = textBlock.fontSize ? `${textBlock.fontSize}px` : "14px";
+        const fontWeight = textBlock.fontWeight || "400";
+        const color = textBlock.color || "#1f2937";
+        const align = textBlock.align || "left";
+
+        const textStyle: React.CSSProperties = {
+          fontFamily: FONT_FAMILY_MAP[fontFamily] || "var(--font-inter), Inter, sans-serif",
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          color: color,
+          textAlign: align,
+        };
+
         return (
           <div
             key={textBlock.id}
-            className="border border-slate-200/80 rounded-xl p-3.5 sm:p-4 bg-slate-50/50 hover:bg-white transition relative group shadow-2xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBlockId(textBlock.id);
+            }}
+            className={`transition-all relative group/text cursor-text ${
+              isSelected
+                ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/15 rounded-xl p-3 sm:p-3.5 shadow-xs"
+                : "border border-transparent hover:border-slate-200/80 rounded-lg p-0 sm:p-0.5 bg-transparent"
+            }`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <Type className="w-3.5 h-3.5 text-blue-600" />
-                <span>Text Block</span>
+            {/* Header toolbar only visible when selected */}
+            {isSelected ? (
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-1.5 text-slate-700 text-xs font-semibold uppercase tracking-wider shrink-0">
+                    <Type className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Text Block</span>
+                  </div>
+                  {/* Styling summary badge */}
+                  <div className="hidden xs:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white border border-slate-200/90 text-[10px] text-slate-500 font-medium shadow-2xs">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0 border border-slate-300"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="truncate max-w-[80px]">{fontFamily}</span>
+                    <span>•</span>
+                    <span>{fontSize}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                    Selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeElement(pageNum, textBlock.id);
+                    }}
+                    aria-label="Delete text block"
+                    className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
+            ) : (
+              /* Unselected: subtle hover delete button so user can still remove if needed without full selection */
               <button
                 type="button"
-                onClick={() => removeElement(pageNum, textBlock.id)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeElement(pageNum, textBlock.id);
+                }}
+                aria-label="Delete text block"
+                className="opacity-0 group-hover/text:opacity-100 absolute top-0 right-0 text-slate-400 hover:text-red-500 p-0.5 rounded bg-white/90 shadow-2xs border border-slate-200 transition cursor-pointer z-10"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
-            </div>
-            <textarea
+            )}
+
+            <AutoExpandingTextarea
               value={textBlock.content}
+              onFocus={() => setSelectedBlockId(textBlock.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedBlockId(textBlock.id);
+              }}
               onChange={(e) => updateTextBlock(pageNum, textBlock.id, e.target.value)}
-              rows={2}
-              className="w-full text-xs sm:text-sm text-slate-800 bg-transparent outline-none border border-transparent focus:border-blue-300 focus:bg-white rounded-md p-1.5 resize-none leading-relaxed"
-              placeholder="Type your notes or document description..."
+              style={textStyle}
+              className={`w-full bg-transparent outline-none resize-none leading-relaxed transition-all ${
+                isSelected
+                  ? "border border-blue-200 focus:border-blue-400 focus:bg-white rounded-md p-1.5"
+                  : "border-0 p-0 hover:border-0 rounded"
+              }`}
+              placeholder={isSelected ? "Type your notes or document description..." : "Enter text..."}
             />
           </div>
         );
@@ -296,7 +642,7 @@ export function EditorCanvas() {
   return (
     <div className="w-full flex flex-col select-none min-w-0">
       {/* Viewport Top Bar Controls */}
-      <div className="w-full flex items-center justify-between sm:justify-end gap-2 mb-2.5 px-1">
+      <div className="w-full flex items-center justify-between gap-2 mb-2.5 px-1 max-w-[794px] mx-auto">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -319,6 +665,9 @@ export function EditorCanvas() {
           >
             →
           </button>
+          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-2xs">
+            A4 • 210 × 297 mm
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -349,20 +698,20 @@ export function EditorCanvas() {
         </div>
       </div>
 
-      {/* Main Document Canvas Sheet */}
+      {/* Main Document Canvas Sheet (A4 Dimensions: 210mm x 297mm / 794px x 1123px) */}
       <div
         id="document-sheet"
-        className="w-full bg-white rounded-xl shadow-sm border border-slate-200/90 p-4 sm:p-6 md:p-8 lg:p-12 min-h-[580px] sm:min-h-[680px] flex flex-col justify-between transition-all space-y-6"
+        className="w-full max-w-[794px] min-h-[1123px] mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all space-y-6 relative"
       >
         <div className="space-y-6 sm:space-y-8">
-          {/* Page 1 Header (Company branding & metadata) */}
+          {/* Page 1 Header (Company branding & title) */}
           {currentPage.pageNumber === 1 ? (
-            <>
+            <div className="space-y-3 sm:space-y-4">
               {/* Document Header */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-0">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-0">
                 {/* Company Info */}
                 <div className="flex items-start gap-3 sm:gap-3.5">
-                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-blue-600 flex items-center justify-center relative overflow-hidden shadow-xs shrink-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-600 flex items-center justify-center relative overflow-hidden shadow-xs shrink-0">
                     <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 bg-white/25 rounded absolute -top-1 -right-1" />
                     <div className="w-4 h-4 sm:w-5 sm:h-5 bg-white rounded-sm" />
                   </div>
@@ -388,59 +737,16 @@ export function EditorCanvas() {
                     type="text"
                     value={metadata.documentTitle}
                     onChange={(e) => setMetadata({ documentTitle: e.target.value })}
-                    className="text-lg sm:text-2xl md:text-3xl font-black tracking-wider text-slate-900 uppercase bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 sm:text-right"
+                    className="text-lg sm:text-xl md:text-2xl font-black tracking-wide text-slate-900 uppercase bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 sm:text-right"
                   />
                 </div>
               </div>
 
-              {/* Issuer / Client / Metadata Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-2 border-t sm:border-t-0 border-slate-100">
-                {/* Issuer Info */}
-                <div>
-                  <span className="text-[10px] sm:text-xs font-bold text-slate-400 block tracking-wider uppercase">
-                    ISSUER/
-                  </span>
-                  <input
-                    type="text"
-                    value={metadata.issuerDetails}
-                    onChange={(e) => setMetadata({ issuerDetails: e.target.value })}
-                    className="text-xs sm:text-sm md:text-base font-semibold text-slate-800 mt-0.5 bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 w-full"
-                  />
-                </div>
-
-                {/* Client Info */}
-                <div>
-                  <span className="text-[10px] sm:text-xs font-bold text-slate-400 block sm:hidden tracking-wider uppercase">
-                    CLIENT/
-                  </span>
-                  <input
-                    type="text"
-                    value={metadata.clientDetails}
-                    onChange={(e) => setMetadata({ clientDetails: e.target.value })}
-                    className="text-xs sm:text-sm md:text-base font-semibold text-slate-800 mt-0.5 sm:mt-4 bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 w-full"
-                  />
-                </div>
-
-                {/* Number & Date */}
-                <div className="sm:text-right space-y-0.5">
-                  <div className="flex items-center sm:justify-end gap-1">
-                    <span className="text-xs sm:text-sm font-bold text-slate-800">No/Date:</span>
-                    <input
-                      type="text"
-                      value={metadata.documentNumber}
-                      onChange={(e) => setMetadata({ documentNumber: e.target.value })}
-                      className="text-xs sm:text-sm text-slate-600 font-medium bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 w-24 sm:text-right"
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    value={metadata.documentDate}
-                    onChange={(e) => setMetadata({ documentDate: e.target.value })}
-                    className="text-xs sm:text-sm text-slate-600 font-medium bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 sm:text-right w-24"
-                  />
-                </div>
+              {/* Accent Divider Line */}
+              <div className="relative border-b border-slate-200/90 pb-2 mb-2">
+                <div className="absolute -bottom-[1px] left-0 w-16 sm:w-20 h-[2px] bg-blue-500 rounded-full" />
               </div>
-            </>
+            </div>
           ) : (
             /* Subsequent Page Compact Header */
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
@@ -458,39 +764,207 @@ export function EditorCanvas() {
             </div>
           )}
 
-          {/* Dynamic Blocks Container */}
-          <div className="space-y-4">
-            {currentPage.blocks.length > 0 ? (
-              currentPage.blocks.map((block) => renderBlock(block, currentPage.pageNumber))
-            ) : (
-              <div className="py-12 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-6 space-y-3 bg-slate-50/40">
-                <FileText className="w-8 h-8 text-slate-300" />
-                <div className="space-y-1">
-                  <p className="text-xs sm:text-sm font-semibold text-slate-600">
-                    This page is currently empty
-                  </p>
-                  <p className="text-[11px] sm:text-xs text-slate-400">
-                    Click Text Block, Simple Table, Image, or Shape from the left Toolbox to add elements.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => addElement("table")}
-                    className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold hover:bg-blue-100 transition cursor-pointer"
+          {/* Dynamic Page Layout Grid Container */}
+          <div className="space-y-4 sm:space-y-6">
+            {getPageLayoutRows(currentPage).map((row, rowIdx) => {
+              const isRowSelected = selectedRowId === row.id;
+              const colCount = Math.max(1, row.columns.length);
+
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => {
+                    setSelectedRowId(row.id);
+                    if (row.columns[0]) {
+                      setSelectedColumnId(row.columns[0].id);
+                    }
+                  }}
+                  className={`transition-all rounded-xl relative group/gridrow ${
+                    isRowSelected
+                      ? "p-2 sm:p-2.5 border border-blue-300/80 bg-blue-50/15 ring-1 ring-blue-400/20"
+                      : "p-0 border border-transparent hover:border-slate-200/60 bg-transparent"
+                  }`}
+                >
+                  {/* Row Header Helper Label (Visible when row is selected or on hover) */}
+                  <div
+                    className={`items-center justify-between mb-1.5 px-1 transition-opacity ${
+                      isRowSelected ? "flex opacity-100" : "hidden group-hover/gridrow:flex opacity-80"
+                    }`}
                   >
-                    + Add Table
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addElement("text")}
-                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition cursor-pointer"
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Row {rowIdx + 1} ({colCount} Column{colCount > 1 ? "s" : ""})
+                      </span>
+                      {isRowSelected && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                          Active Grid Row
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRowId(row.id);
+                          addPageColumn(currentPage.pageNumber, row.id);
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded px-2 py-0.5 transition cursor-pointer shadow-2xs"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Column</span>
+                      </button>
+                      {colCount > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deletePageColumn(currentPage.pageNumber, row.id);
+                          }}
+                          className="text-[11px] font-medium text-slate-400 hover:text-red-600 px-1.5 py-0.5 transition cursor-pointer"
+                        >
+                          Delete Col
+                        </button>
+                      )}
+                      {getPageLayoutRows(currentPage).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deletePageRow(currentPage.pageNumber, row.id);
+                          }}
+                          aria-label="Delete grid row"
+                          className="text-slate-400 hover:text-red-600 p-1 rounded transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Responsive Column Grid */}
+                  <div
+                    className="grid gap-2 sm:gap-3"
+                    style={{
+                      gridTemplateColumns:
+                        colCount === 1
+                          ? "1fr"
+                          : `repeat(${colCount}, minmax(0, 1fr))`,
+                    }}
                   >
-                    + Add Text
-                  </button>
+                    {row.columns.map((col, colIdx) => {
+                      const isColSelected =
+                        selectedRowId === row.id && selectedColumnId === col.id;
+
+                      return (
+                        <div
+                          key={col.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRowId(row.id);
+                            setSelectedColumnId(col.id);
+                          }}
+                          className={`flex flex-col gap-2 min-w-0 transition-all rounded-lg ${
+                            isColSelected && isRowSelected
+                              ? "ring-1 ring-blue-400/40 bg-blue-50/10 p-1"
+                              : "p-0"
+                          }`}
+                        >
+                          {col.blocks.length > 0 ? (
+                            col.blocks.map((block) =>
+                              renderBlock(block, currentPage.pageNumber)
+                            )
+                          ) : (
+                            <div className="py-6 sm:py-8 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-4 space-y-2.5 bg-white/70 hover:border-blue-300 hover:bg-blue-50/10 transition">
+                              <span className="text-xs font-semibold text-slate-500">
+                                Column {colIdx + 1} Slot
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                Add an element to this column:
+                              </span>
+                              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addElementToColumn(
+                                      currentPage.pageNumber,
+                                      row.id,
+                                      col.id,
+                                      "text"
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition cursor-pointer"
+                                >
+                                  + Text
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addElementToColumn(
+                                      currentPage.pageNumber,
+                                      row.id,
+                                      col.id,
+                                      "table"
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200 text-xs font-medium hover:bg-blue-100 transition cursor-pointer"
+                                >
+                                  + Table
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addElementToColumn(
+                                      currentPage.pageNumber,
+                                      row.id,
+                                      col.id,
+                                      "image"
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition cursor-pointer"
+                                >
+                                  + Image
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addElementToColumn(
+                                      currentPage.pageNumber,
+                                      row.id,
+                                      col.id,
+                                      "shape"
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition cursor-pointer"
+                                >
+                                  + Divider
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => addPageRow(currentPage.pageNumber)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-dashed border-slate-300 hover:border-blue-400 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50/50 transition cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Grid Row to Page</span>
+            </button>
           </div>
         </div>
 

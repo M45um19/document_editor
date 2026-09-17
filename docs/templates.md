@@ -1,7 +1,7 @@
 # Feature Guide: Template Manager & Persistence
 
 ## Overview
-The Templates feature (`src/features/templates/`) manages template persistence, multi-template tab synchronization, and distinct per-template LocalStorage slots. It ensures each template maintains its own independent design, pages, blocks, and metadata across browser sessions.
+The Templates feature (`src/features/templates/`) manages template persistence, multi-template tab synchronization, and distinct per-template LocalStorage slots. It ensures each template maintains its own independent design, pages, layout rows, blocks, and metadata across browser sessions.
 
 ---
 
@@ -69,7 +69,7 @@ Each template is completely isolated in `localStorage` to ensure independent edi
 ┌────────────────────────────────┐ ┌────────────────────────────────┐
 │ Key: "doc_template_data_template-1" │ │ Key: "doc_template_data_template-2" │
 │ DocumentStateSnapshot (JSON)   │ │ DocumentStateSnapshot (JSON)   │
-│ (Metadata, Pages, Blocks)      │ │ (Metadata, Pages, Blocks)      │
+│ (Metadata, Pages, LayoutRows)  │ │ (Metadata, Pages, LayoutRows)  │
 └────────────────────────────────┘ └────────────────────────────────┘
 ```
 
