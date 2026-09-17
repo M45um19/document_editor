@@ -23,6 +23,7 @@ import {
   CanvasBlock,
   TableRowItem,
   TableColumn,
+  PageGridRow,
   DEFAULT_TABLE_COLUMNS,
   FONT_FAMILY_MAP,
 } from "../types";
@@ -108,8 +109,105 @@ export function EditorCanvas() {
   const deletePageRow = useEditorState((s) => s.deletePageRow);
   const addPageColumn = useEditorState((s) => s.addPageColumn);
   const deletePageColumn = useEditorState((s) => s.deletePageColumn);
+  const updateRowColumnWidths = useEditorState((s) => s.updateRowColumnWidths);
   const addElementToColumn = useEditorState((s) => s.addElementToColumn);
   const removeElement = useEditorState((s) => s.removeElement);
+
+  const rowRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [resizingInfo, setResizingInfo] = React.useState<{
+    rowId: string;
+    colIdx: number;
+    leftWidth: number;
+    rightWidth: number;
+  } | null>(null);
+
+  const handleResizeMouseDown = (
+    e: React.MouseEvent,
+    row: PageGridRow,
+    colIdx: number,
+    pageNum: number
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rowEl = rowRefs.current[row.id];
+    if (!rowEl) return;
+
+    const rowWidthPx = rowEl.getBoundingClientRect().width;
+    if (rowWidthPx <= 0) return;
+
+    const colCount = row.columns.length;
+    const currentWidths = row.columns.map(
+      (c) => c.width ?? Math.round((100 / colCount) * 10) / 10
+    );
+
+    const leftCol = row.columns[colIdx];
+    const rightCol = row.columns[colIdx + 1];
+    if (!leftCol || !rightCol) return;
+
+    const initialLeft = currentWidths[colIdx];
+    const initialRight = currentWidths[colIdx + 1];
+    const combinedWidth = initialLeft + initialRight;
+    const startX = e.clientX;
+    const MIN_COL_WIDTH = 8; // minimum 8% width so columns don't collapse
+
+    setResizingInfo({
+      rowId: row.id,
+      colIdx,
+      leftWidth: initialLeft,
+      rightWidth: initialRight,
+    });
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaPercent = (deltaX / rowWidthPx) * 100;
+
+      let newLeft = initialLeft + deltaPercent;
+      let newRight = initialRight - deltaPercent;
+
+      if (newLeft < MIN_COL_WIDTH) {
+        newLeft = MIN_COL_WIDTH;
+        newRight = combinedWidth - MIN_COL_WIDTH;
+      } else if (newRight < MIN_COL_WIDTH) {
+        newRight = MIN_COL_WIDTH;
+        newLeft = combinedWidth - MIN_COL_WIDTH;
+      }
+
+      newLeft = Math.round(newLeft * 10) / 10;
+      newRight = Math.round((combinedWidth - newLeft) * 10) / 10;
+
+      setResizingInfo({
+        rowId: row.id,
+        colIdx,
+        leftWidth: newLeft,
+        rightWidth: newRight,
+      });
+
+      const updatedWidths = currentWidths.map((w, i) => {
+        if (i === colIdx) return { id: leftCol.id, width: newLeft };
+        if (i === colIdx + 1) return { id: rightCol.id, width: newRight };
+        return { id: row.columns[i].id, width: w };
+      });
+
+      updateRowColumnWidths(pageNum, row.id, updatedWidths);
+    };
+
+    const onMouseUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setResizingInfo(null);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
 
   if (!isMounted) {
     return (
@@ -182,11 +280,14 @@ export function EditorCanvas() {
         return (
           <div
             key={tableBlock.id}
-            onClick={() => setSelectedBlockId(tableBlock.id)}
-            className={`border rounded-xl p-3 sm:p-4 md:p-5 bg-white space-y-3 sm:space-y-3.5 relative group shadow-2xs transition-all cursor-default ${
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBlockId(tableBlock.id);
+            }}
+            className={`rounded-xl transition-all cursor-default relative group/table ${
               isSelected
-                ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10 shadow-xs"
-                : "border-slate-200/80 hover:border-slate-300"
+                ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10 p-3 sm:p-4 md:p-5 shadow-xs space-y-3 sm:space-y-3.5"
+                : "border border-transparent hover:border-slate-200/80 p-1 sm:p-2 bg-transparent space-y-2"
             }`}
           >
             {/* Table Header Controls */}
@@ -198,8 +299,14 @@ export function EditorCanvas() {
                 <h3 className="text-xs sm:text-sm md:text-base font-bold text-slate-800 tracking-wide uppercase truncate">
                   {tableBlock.title}
                 </h3>
-                {/* Styling summary badge */}
-                <div className="hidden xs:flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200/90 text-[10px] text-slate-500 font-medium shadow-2xs">
+                {/* Styling summary badge - visible on hover or select */}
+                <div
+                  className={`items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200/90 text-[10px] text-slate-500 font-medium shadow-2xs transition-opacity ${
+                    isSelected
+                      ? "hidden xs:flex opacity-100"
+                      : "hidden xs:flex opacity-0 group-hover/table:opacity-100"
+                  }`}
+                >
                   <span
                     className="w-2 h-2 rounded-full shrink-0 border border-slate-300"
                     style={{ backgroundColor: color }}
@@ -212,7 +319,13 @@ export function EditorCanvas() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <div
+                className={`flex items-center gap-1.5 sm:gap-2 shrink-0 transition-opacity duration-150 ${
+                  isSelected
+                    ? "opacity-100"
+                    : "opacity-0 group-hover/table:opacity-100 pointer-events-none group-hover/table:pointer-events-auto"
+                }`}
+              >
                 {isSelected && (
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
                     Selected
@@ -224,7 +337,7 @@ export function EditorCanvas() {
                     e.stopPropagation();
                     addTableRow(pageNum, tableBlock.id);
                   }}
-                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer shadow-2xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Row</span>
@@ -235,7 +348,7 @@ export function EditorCanvas() {
                     e.stopPropagation();
                     addTableColumn(pageNum, tableBlock.id);
                   }}
-                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer shadow-2xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Column</span>
@@ -259,7 +372,13 @@ export function EditorCanvas() {
               <table className="min-w-[500px] w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/80 text-slate-700 text-xs sm:text-sm font-bold border-y border-slate-200/80">
-                    <th className="py-2.5 sm:py-3 px-1 w-8 text-center" />
+                    <th
+                      className={`py-2.5 sm:py-3 px-1 w-7 text-center transition-opacity ${
+                        isSelected
+                          ? "opacity-100"
+                          : "opacity-0 group-hover/table:opacity-100"
+                      }`}
+                    />
                     <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-10 sm:w-12 text-center">#</th>
                     {columns.map((col) => (
                       <th
@@ -281,7 +400,13 @@ export function EditorCanvas() {
                   {tableBlock.rows.map((row, index) => (
                     <tr key={row.id} className="group/row hover:bg-slate-50/50 transition">
                       {/* Drag Handle */}
-                      <td className="py-2 sm:py-2.5 px-1 text-center text-slate-300 group-hover/row:text-slate-500 cursor-grab">
+                      <td
+                        className={`py-2 sm:py-2.5 px-1 text-center text-slate-300 group-hover/row:text-slate-500 cursor-grab transition-opacity ${
+                          isSelected
+                            ? "opacity-100"
+                            : "opacity-0 group-hover/table:opacity-100"
+                        }`}
+                      >
                         <GripVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 mx-auto" />
                       </td>
 
@@ -302,7 +427,10 @@ export function EditorCanvas() {
                                 type="text"
                                 value={row.item ?? ""}
                                 onFocus={() => handleCellFocus(row.id, col.id)}
-                                onClick={() => handleCellFocus(row.id, col.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCellFocus(row.id, col.id);
+                                }}
                                 onChange={(e) =>
                                   updateTableRow(
                                     pageNum,
@@ -313,10 +441,10 @@ export function EditorCanvas() {
                                   )
                                 }
                                 style={cellStyle}
-                                className={`bg-blue-50/60 border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
+                                className={`border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
                                   isSelectedCell
-                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white"
-                                    : "border-blue-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white"
+                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
                                 }`}
                               />
                             </td>
@@ -330,7 +458,10 @@ export function EditorCanvas() {
                                 type="number"
                                 value={row.qty ?? 0}
                                 onFocus={() => handleCellFocus(row.id, col.id)}
-                                onClick={() => handleCellFocus(row.id, col.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCellFocus(row.id, col.id);
+                                }}
                                 onChange={(e) =>
                                   updateTableRow(
                                     pageNum,
@@ -341,10 +472,10 @@ export function EditorCanvas() {
                                   )
                                 }
                                 style={cellStyle}
-                                className={`bg-blue-50/60 border rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
+                                className={`border rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
                                   isSelectedCell
-                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white"
-                                    : "border-blue-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white"
+                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
                                 }`}
                               />
                             </td>
@@ -358,7 +489,10 @@ export function EditorCanvas() {
                                 type="text"
                                 value={row.unitPrice ?? ""}
                                 onFocus={() => handleCellFocus(row.id, col.id)}
-                                onClick={() => handleCellFocus(row.id, col.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCellFocus(row.id, col.id);
+                                }}
                                 onChange={(e) =>
                                   updateTableRow(
                                     pageNum,
@@ -369,10 +503,10 @@ export function EditorCanvas() {
                                   )
                                 }
                                 style={cellStyle}
-                                className={`bg-transparent text-center outline-none border-b w-16 sm:w-20 transition-all ${
+                                className={`text-center outline-none border rounded-md px-2 py-1 w-16 sm:w-20 transition-all ${
                                   isSelectedCell
-                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/50 rounded px-1"
-                                    : "border-transparent hover:border-slate-300 focus:border-blue-500"
+                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
                                 }`}
                               />
                             </td>
@@ -383,9 +517,12 @@ export function EditorCanvas() {
                           return (
                             <td
                               key={col.id}
-                              onClick={() => handleCellFocus(row.id, col.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCellFocus(row.id, col.id);
+                              }}
                               style={cellStyle}
-                              className={`py-2 sm:py-2.5 px-2 sm:px-3 text-right cursor-pointer rounded transition-all ${
+                              className={`py-2 sm:py-2.5 px-2 sm:px-3 text-right cursor-pointer rounded-md transition-all ${
                                 isSelectedCell
                                   ? "ring-2 ring-blue-500/40 bg-blue-50/60 font-semibold"
                                   : "hover:bg-slate-100/60"
@@ -409,7 +546,10 @@ export function EditorCanvas() {
                               type="text"
                               value={displayVal}
                               onFocus={() => handleCellFocus(row.id, col.id)}
-                              onClick={() => handleCellFocus(row.id, col.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCellFocus(row.id, col.id);
+                              }}
                               onChange={(e) =>
                                 updateTableRow(
                                   pageNum,
@@ -420,10 +560,10 @@ export function EditorCanvas() {
                                 )
                               }
                               style={cellStyle}
-                              className={`bg-blue-50/60 border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
+                              className={`border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
                                 isSelectedCell
-                                  ? "border-blue-500 ring-2 ring-blue-500/40 bg-white"
-                                  : "border-blue-100 hover:border-blue-300 focus:border-blue-500 focus:bg-white"
+                                  ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                                  : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
                               }`}
                             />
                           </td>
@@ -436,20 +576,32 @@ export function EditorCanvas() {
             </div>
 
             {/* Bottom table actions */}
-            <div className="pt-1 sm:pt-2 flex flex-wrap items-center justify-between gap-2">
+            <div
+              className={`pt-1 sm:pt-2 flex flex-wrap items-center justify-between gap-2 transition-opacity duration-150 ${
+                isSelected
+                  ? "opacity-100"
+                  : "opacity-0 group-hover/table:opacity-100 pointer-events-none group-hover/table:pointer-events-auto"
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => addTableRow(pageNum, tableBlock.id)}
-                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addTableRow(pageNum, tableBlock.id);
+                  }}
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer shadow-2xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Row</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => addTableColumn(pageNum, tableBlock.id)}
-                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addTableColumn(pageNum, tableBlock.id);
+                  }}
+                  className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-blue-50/70 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition cursor-pointer shadow-2xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Column</span>
@@ -459,14 +611,20 @@ export function EditorCanvas() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => deleteTableColumn(pageNum, tableBlock.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteTableColumn(pageNum, tableBlock.id);
+                  }}
                   className="text-xs text-slate-400 hover:text-red-500 transition px-2 py-1 cursor-pointer"
                 >
                   Delete Last Column
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteTableRow(pageNum, tableBlock.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteTableRow(pageNum, tableBlock.id);
+                  }}
                   className="text-xs text-slate-400 hover:text-red-500 transition px-2 py-1 cursor-pointer"
                 >
                   Delete Last Row
@@ -594,7 +752,7 @@ export function EditorCanvas() {
               <button
                 type="button"
                 onClick={() => removeElement(pageNum, imageBlock.id)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer opacity-0 group-hover:opacity-100"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -624,7 +782,7 @@ export function EditorCanvas() {
               <button
                 type="button"
                 onClick={() => removeElement(pageNum, shapeBlock.id)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer opacity-0 group-hover:opacity-100"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -701,6 +859,12 @@ export function EditorCanvas() {
       {/* Main Document Canvas Sheet (A4 Dimensions: 210mm x 297mm / 794px x 1123px) */}
       <div
         id="document-sheet"
+        onClick={() => {
+          setSelectedBlockId(null);
+          setSelectedCell(null);
+          setSelectedRowId(null);
+          setSelectedColumnId(null);
+        }}
         className="w-full max-w-[794px] min-h-[1123px] mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all space-y-6 relative"
       >
         <div className="space-y-6 sm:space-y-8">
@@ -773,7 +937,8 @@ export function EditorCanvas() {
               return (
                 <div
                   key={row.id}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setSelectedRowId(row.id);
                     if (row.columns[0]) {
                       setSelectedColumnId(row.columns[0].id);
@@ -787,8 +952,10 @@ export function EditorCanvas() {
                 >
                   {/* Row Header Helper Label (Visible when row is selected or on hover) */}
                   <div
-                    className={`items-center justify-between mb-1.5 px-1 transition-opacity ${
-                      isRowSelected ? "flex opacity-100" : "hidden group-hover/gridrow:flex opacity-80"
+                    className={`items-center justify-between mb-1.5 px-1 transition-opacity duration-150 ${
+                      isRowSelected
+                        ? "flex opacity-100"
+                        : "flex opacity-0 group-hover/gridrow:opacity-100 pointer-events-none group-hover/gridrow:pointer-events-auto"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -843,45 +1010,61 @@ export function EditorCanvas() {
                     </div>
                   </div>
 
-                  {/* Responsive Column Grid */}
+                  {/* Responsive Column Flex Container with Percentage Widths & Draggable Resizers */}
                   <div
-                    className="grid gap-2 sm:gap-3"
-                    style={{
-                      gridTemplateColumns:
-                        colCount === 1
-                          ? "1fr"
-                          : `repeat(${colCount}, minmax(0, 1fr))`,
+                    ref={(el) => {
+                      rowRefs.current[row.id] = el;
                     }}
+                    className="flex flex-row items-stretch w-full relative"
                   >
                     {row.columns.map((col, colIdx) => {
                       const isColSelected =
                         selectedRowId === row.id && selectedColumnId === col.id;
+                      const effectiveWidth =
+                        col.width ?? Math.round((100 / colCount) * 10) / 10;
+                      const isBeingResized =
+                        resizingInfo?.rowId === row.id &&
+                        (resizingInfo.colIdx === colIdx || resizingInfo.colIdx + 1 === colIdx);
 
                       return (
                         <div
                           key={col.id}
+                          style={{ width: `${effectiveWidth}%` }}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedRowId(row.id);
                             setSelectedColumnId(col.id);
                           }}
-                          className={`flex flex-col gap-2 min-w-0 transition-all rounded-lg ${
+                          className={`flex flex-col gap-2 min-w-0 relative shrink-0 px-1 sm:px-1.5 transition-[width] duration-75 ${
                             isColSelected && isRowSelected
-                              ? "ring-1 ring-blue-400/40 bg-blue-50/10 p-1"
-                              : "p-0"
+                              ? "ring-1 ring-blue-400/40 bg-blue-50/10 rounded-lg"
+                              : ""
                           }`}
                         >
+                          {/* Active Resize Width Badge */}
+                          {isBeingResized && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full shadow-xs pointer-events-none">
+                              {Math.round(effectiveWidth)}%
+                            </div>
+                          )}
+
                           {col.blocks.length > 0 ? (
                             col.blocks.map((block) =>
                               renderBlock(block, currentPage.pageNumber)
                             )
                           ) : (
-                            <div className="py-6 sm:py-8 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-4 space-y-2.5 bg-white/70 hover:border-blue-300 hover:bg-blue-50/10 transition">
+                            <div
+                              className={`py-6 sm:py-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-center p-2 sm:p-4 space-y-2 transition-all ${
+                                isRowSelected
+                                  ? "border-blue-300/80 bg-blue-50/20"
+                                  : "border-slate-200/80 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/10"
+                              }`}
+                            >
                               <span className="text-xs font-semibold text-slate-500">
-                                Column {colIdx + 1} Slot
+                                Column {colIdx + 1} ({Math.round(effectiveWidth)}%)
                               </span>
                               <span className="text-[11px] text-slate-400">
-                                Add an element to this column:
+                                Click to add element:
                               </span>
                               <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
                                 <button
@@ -895,7 +1078,7 @@ export function EditorCanvas() {
                                       "text"
                                     );
                                   }}
-                                  className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition cursor-pointer"
+                                  className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
                                 >
                                   + Text
                                 </button>
@@ -910,7 +1093,7 @@ export function EditorCanvas() {
                                       "table"
                                     );
                                   }}
-                                  className="px-2.5 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200 text-xs font-medium hover:bg-blue-100 transition cursor-pointer"
+                                  className="px-2.5 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200 text-xs font-medium hover:bg-blue-100 transition cursor-pointer shadow-2xs"
                                 >
                                   + Table
                                 </button>
@@ -925,7 +1108,7 @@ export function EditorCanvas() {
                                       "image"
                                     );
                                   }}
-                                  className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition cursor-pointer"
+                                  className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
                                 >
                                   + Image
                                 </button>
@@ -940,10 +1123,42 @@ export function EditorCanvas() {
                                       "shape"
                                     );
                                   }}
-                                  className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium hover:bg-slate-200 transition cursor-pointer"
+                                  className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
                                 >
                                   + Divider
                                 </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Draggable Border Resize Handle between adjacent columns */}
+                          {colIdx < row.columns.length - 1 && (
+                            <div
+                              onMouseDown={(e) =>
+                                handleResizeMouseDown(
+                                  e,
+                                  row,
+                                  colIdx,
+                                  currentPage.pageNumber
+                                )
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              title="Drag border to resize column width"
+                              className={`absolute -right-2 top-0 bottom-0 w-4 z-30 cursor-col-resize flex items-center justify-center group/resizer select-none transition-opacity ${
+                                isRowSelected || isBeingResized
+                                  ? "opacity-100"
+                                  : "opacity-0 group-hover/gridrow:opacity-100"
+                              }`}
+                            >
+                              <div
+                                className={`w-[2px] h-full transition-all rounded-full ${
+                                  isBeingResized
+                                    ? "bg-blue-600 w-[3px] shadow-xs"
+                                    : "bg-slate-300 group-hover/resizer:bg-blue-500 group-hover/resizer:w-[3px]"
+                                }`}
+                              />
+                              <div className="opacity-0 group-hover/resizer:opacity-100 absolute -top-5 px-1.5 py-0.5 bg-slate-900 text-white text-[9px] font-semibold rounded shadow-md pointer-events-none transition-opacity whitespace-nowrap z-40">
+                                ↔ Resize
                               </div>
                             </div>
                           )}
@@ -960,7 +1175,7 @@ export function EditorCanvas() {
             <button
               type="button"
               onClick={() => addPageRow(currentPage.pageNumber)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-dashed border-slate-300 hover:border-blue-400 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50/50 transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-dashed border-slate-300 hover:border-blue-400 text-xs font-medium text-slate-500 hover:text-blue-600 hover:bg-blue-50/50 transition cursor-pointer opacity-75 hover:opacity-100"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Grid Row to Page</span>

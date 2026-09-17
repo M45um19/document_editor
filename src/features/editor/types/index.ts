@@ -97,6 +97,7 @@ export interface DocumentMetadata {
 export interface PageGridColumn {
   id: string;
   blocks: CanvasBlock[];
+  width?: number; // percentage width of the row (e.g. 20 for 20%)
 }
 
 export interface PageGridRow {
