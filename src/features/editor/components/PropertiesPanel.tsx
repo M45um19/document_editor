@@ -23,6 +23,8 @@ import {
   FONT_FAMILY_MAP,
   AVAILABLE_FONTS,
   DEFAULT_TABLE_COLUMNS,
+  DEFAULT_BORDER_STYLE_OPTIONS,
+  TableStyleSettings,
 } from "../types";
 
 interface PropertiesPanelProps {
@@ -47,10 +49,6 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
   const addPageColumn = useEditorState((s) => s.addPageColumn);
   const deletePageColumn = useEditorState((s) => s.deletePageColumn);
 
-  const [tableWidth, setTableWidth] = useState("120");
-  const [padding, setPadding] = useState("0");
-  const [rowSpacing, setRowSpacing] = useState("1");
-
   // Find active or first text/table block on current page
   const currentPageObj = pages.find((p) => p.pageNumber === activePage) || pages[0];
   const currentBlocks = currentPageObj?.blocks || [];
@@ -61,6 +59,30 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
     | (TextBlock | TableBlock)
     | undefined;
   const activeBlock = selectedBlock || firstBlock;
+
+  // Active table block (either directly selected, or containing the selected cell, or first table on page)
+  const activeTable = (
+    selectedBlock?.type === "table"
+      ? selectedBlock
+      : currentBlocks.find((b) => b.type === "table")
+  ) as TableBlock | undefined;
+
+  const currentTableWidth =
+    activeTable?.tableWidth !== undefined ? String(activeTable.tableWidth) : "100%";
+  const currentBorderStyle =
+    activeTable?.borderStyle || "1px solid #E5E7EB";
+  const currentPadding =
+    activeTable?.padding !== undefined ? activeTable.padding : 8;
+  const currentRowSpacing =
+    activeTable?.rowSpacing !== undefined ? activeTable.rowSpacing : 0;
+
+  const handleTableSettingChange = (settings: Partial<TableStyleSettings>) => {
+    if (!activeTable) return;
+    if (selectedBlockId !== activeTable.id && !selectedCell) {
+      setSelectedBlockId(activeTable.id);
+    }
+    updateBlockStyle(activePage, activeTable.id, settings);
+  };
 
   // Check if a specific table cell is selected on the active block
   const isTableActive = activeBlock?.type === "table";
@@ -369,72 +391,98 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
           <span>Table Settings</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 2xl:gap-4">
-          {/* Width */}
-          <div className="space-y-1 2xl:space-y-1.5">
-            <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
-              Width
-            </label>
-            <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
-              <input
-                type="text"
-                value={tableWidth}
-                onChange={(e) => setTableWidth(e.target.value)}
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
-              />
-              <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
-                px
-              </span>
+        {activeTable ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 2xl:gap-4">
+            {/* Width */}
+            <div className="space-y-1 2xl:space-y-1.5">
+              <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
+                Width
+              </label>
+              <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
+                <input
+                  type="text"
+                  value={currentTableWidth}
+                  onChange={(e) => handleTableSettingChange({ tableWidth: e.target.value })}
+                  placeholder="100%"
+                  className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Borders */}
-          <div className="space-y-1 2xl:space-y-1.5">
-            <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
-              Borders
-            </label>
-            <div className="flex items-center justify-between px-2 2xl:px-2.5 py-1.5 2xl:py-2 border border-slate-200 rounded-md text-[11px] 2xl:text-xs font-medium text-slate-800 bg-white shadow-2xs hover:border-slate-300 cursor-pointer overflow-hidden">
-              <span className="truncate">1px Solid #E5E7EB</span>
-              <ChevronDown className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-400 shrink-0 ml-1" />
+            {/* Borders */}
+            <div className="space-y-1 2xl:space-y-1.5">
+              <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
+                Borders
+              </label>
+              <div className="relative">
+                <select
+                  value={currentBorderStyle}
+                  onChange={(e) => handleTableSettingChange({ borderStyle: e.target.value })}
+                  className="w-full appearance-none pl-2.5 pr-7 py-1.5 2xl:py-2 border border-slate-200 rounded-md text-xs 2xl:text-sm font-medium text-slate-800 bg-white shadow-2xs hover:border-slate-300 focus:border-blue-500 outline-none cursor-pointer truncate"
+                >
+                  {DEFAULT_BORDER_STYLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 2xl:w-4 2xl:h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
             </div>
-          </div>
 
-          {/* Padding */}
-          <div className="space-y-1 2xl:space-y-1.5">
-            <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
-              Padding
-            </label>
-            <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
-              <input
-                type="text"
-                value={padding}
-                onChange={(e) => setPadding(e.target.value)}
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
-              />
-              <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
-                px
-              </span>
+            {/* Padding */}
+            <div className="space-y-1 2xl:space-y-1.5">
+              <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
+                Padding
+              </label>
+              <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
+                <input
+                  type="number"
+                  min={0}
+                  max={40}
+                  value={currentPadding}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    handleTableSettingChange({ padding: isNaN(val) ? 0 : val });
+                  }}
+                  className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
+                />
+                <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
+                  px
+                </span>
+              </div>
             </div>
-          </div>
 
-          {/* Row Spacing */}
-          <div className="space-y-1 2xl:space-y-1.5">
-            <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
-              Row Spacing
-            </label>
-            <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
-              <input
-                type="text"
-                value={rowSpacing}
-                onChange={(e) => setRowSpacing(e.target.value)}
-                className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
-              />
-              <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
-                px
-              </span>
+            {/* Row Spacing */}
+            <div className="space-y-1 2xl:space-y-1.5">
+              <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
+                Row Spacing
+              </label>
+              <div className="flex items-center border border-slate-200 rounded-md px-2.5 2xl:px-3 py-1.5 2xl:py-2 bg-white shadow-2xs focus-within:border-blue-500">
+                <input
+                  type="number"
+                  min={0}
+                  max={40}
+                  value={currentRowSpacing}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    handleTableSettingChange({ rowSpacing: isNaN(val) ? 0 : val });
+                  }}
+                  className="w-full text-xs 2xl:text-sm font-medium text-slate-800 outline-none bg-transparent"
+                />
+                <span className="text-[11px] 2xl:text-xs text-slate-400 font-medium ml-1">
+                  px
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="py-3 px-3 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
+            <p className="text-xs text-slate-500">
+              No table found on this page. Add a table to customize its settings.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Page Column Management */}

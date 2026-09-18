@@ -15,6 +15,7 @@ import {
   PageGridColumn,
   DEFAULT_TABLE_COLUMNS,
   TableBlock,
+  TableStyleSettings,
 } from "../types";
 
 export interface EditorStoreState {
@@ -60,6 +61,19 @@ export interface EditorStoreState {
     rowId: string,
     columnWidths: { id: string; width: number }[]
   ) => void;
+  updateRowMargins: (
+    pageNumber: number,
+    rowId: string,
+    margins: { marginTop?: number; marginBottom?: number }
+  ) => void;
+  updateRowPadding: (
+    pageNumber: number,
+    rowId: string,
+    padding: {
+      paddingTop?: number;
+      paddingBottom?: number;
+    }
+  ) => void;
 
   // Component insertion with auto-pagination
   addElement: (type: "text" | "table" | "image" | "shape") => void;
@@ -77,7 +91,12 @@ export interface EditorStoreState {
   updateBlockStyle: (
     pageNumber: number,
     blockId: string,
-    style: Partial<BlockTypographyStyle>
+    style: Partial<BlockTypographyStyle & TableStyleSettings>
+  ) => void;
+  updateTableSettings: (
+    pageNumber: number,
+    blockId: string,
+    settings: Partial<TableStyleSettings>
   ) => void;
   updateTextBlockStyle: (
     pageNumber: number,
@@ -102,6 +121,13 @@ export interface EditorStoreState {
   deleteTableRow: (pageNumber: number, blockId: string, rowId?: number) => void;
   addTableColumn: (pageNumber: number, blockId: string) => void;
   deleteTableColumn: (pageNumber: number, blockId: string, columnId?: string) => void;
+  updateTableTitle: (pageNumber: number, blockId: string, title: string) => void;
+  updateTableColumnLabel: (
+    pageNumber: number,
+    blockId: string,
+    columnId: string,
+    label: string
+  ) => void;
 }
 
 export const INITIAL_METADATA: DocumentMetadata = {
@@ -135,6 +161,10 @@ export const INITIAL_TABLE_ROWS: TableRowItem[] = [
 export const INITIAL_PAGE_ROWS: PageGridRow[] = [
   {
     id: "page-row-meta",
+    marginTop: 0,
+    marginBottom: 16,
+    paddingTop: 6,
+    paddingBottom: 6,
     columns: [
       {
         id: "col-meta-issuer",
@@ -185,6 +215,10 @@ export const INITIAL_PAGE_ROWS: PageGridRow[] = [
   },
   {
     id: "page-row-table",
+    marginTop: 0,
+    marginBottom: 16,
+    paddingTop: 6,
+    paddingBottom: 6,
     columns: [
       {
         id: "col-table-main",
@@ -200,6 +234,10 @@ export const INITIAL_PAGE_ROWS: PageGridRow[] = [
             fontWeight: "400",
             color: "#1F2937",
             align: "left",
+            tableWidth: "100%",
+            borderStyle: "1px solid #E5E7EB",
+            padding: 8,
+            rowSpacing: 0,
           },
         ],
       },
@@ -396,6 +434,10 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
           const placedRow: PageGridRow = {
             id: row.id,
             columns: [{ id: row.columns[0].id, blocks: [table] }],
+            marginTop: row.marginTop,
+            marginBottom: row.marginBottom,
+            paddingTop: row.paddingTop,
+            paddingBottom: row.paddingBottom,
           };
           currentPageRows.push(placedRow);
           currentWeight += finalTableWeight;
@@ -413,6 +455,10 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
           const placedRow: PageGridRow = {
             id: row.id,
             columns: [{ id: row.columns[0].id, blocks: [tablePart] }],
+            marginTop: row.marginTop,
+            marginBottom: row.marginBottom,
+            paddingTop: row.paddingTop,
+            paddingBottom: row.paddingBottom,
           };
           currentPageRows.push(placedRow);
 
@@ -611,6 +657,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       const newRow: PageGridRow = {
         id: newRowId,
         columns: [{ id: newColId, blocks: [] }],
+        marginTop: 0,
+        marginBottom: 16,
+        paddingTop: 6,
+        paddingBottom: 6,
       };
 
       const targetPageNum = pageNumber || state.activePage;
@@ -778,6 +828,56 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
     });
   },
 
+  updateRowMargins: (pageNumber, rowId, margins) => {
+    set((state) => {
+      const updatedPages = state.pages.map((p) => {
+        const currentRows = getPageLayoutRows(p);
+        const updatedRows = currentRows.map((r) => {
+          if (r.id === rowId) {
+            return {
+              ...r,
+              marginTop: margins.marginTop !== undefined ? margins.marginTop : (r.marginTop ?? 0),
+              marginBottom: margins.marginBottom !== undefined ? margins.marginBottom : (r.marginBottom ?? 16),
+            };
+          }
+          return r;
+        });
+        return {
+          ...p,
+          layoutRows: updatedRows,
+          blocks: extractAllBlocksFromRows(updatedRows),
+        };
+      });
+      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
+      return { pages: updatedPages };
+    });
+  },
+
+  updateRowPadding: (pageNumber, rowId, padding) => {
+    set((state) => {
+      const updatedPages = state.pages.map((p) => {
+        const currentRows = getPageLayoutRows(p);
+        const updatedRows = currentRows.map((r) => {
+          if (r.id === rowId) {
+            return {
+              ...r,
+              paddingTop: padding.paddingTop !== undefined ? padding.paddingTop : (r.paddingTop ?? 6),
+              paddingBottom: padding.paddingBottom !== undefined ? padding.paddingBottom : (r.paddingBottom ?? 6),
+            };
+          }
+          return r;
+        });
+        return {
+          ...p,
+          layoutRows: updatedRows,
+          blocks: extractAllBlocksFromRows(updatedRows),
+        };
+      });
+      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
+      return { pages: updatedPages };
+    });
+  },
+
   saveCurrentTemplate: () => {
     const now = new Date();
     const formatted = `${now.toISOString().split("T")[0]} | ${now.toLocaleTimeString([], {
@@ -885,6 +985,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         fontWeight: "400",
         color: "#1f2937",
         align: "left",
+        tableWidth: "100%",
+        borderStyle: "1px solid #E5E7EB",
+        padding: 8,
+        rowSpacing: 0,
       };
     } else if (type === "image") {
       newBlock = {
@@ -993,6 +1097,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           fontWeight: "400",
           color: "#1f2937",
           align: "left",
+          tableWidth: "100%",
+          borderStyle: "1px solid #E5E7EB",
+          padding: 8,
+          rowSpacing: 0,
         };
       } else if (type === "image") {
         newBlock = {
@@ -1145,6 +1253,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   updateTextBlockStyle: (pageNumber, blockId, style) => {
     get().updateBlockStyle(pageNumber, blockId, style);
+  },
+
+  updateTableSettings: (pageNumber, blockId, settings) => {
+    get().updateBlockStyle(pageNumber, blockId, settings);
   },
 
   updateTableCellStyle: (pageNumber, blockId, rowId, columnKey, style) => {
@@ -1397,6 +1509,70 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
                   return newRow;
                 });
                 return { ...b, columns: updatedColumns, rows };
+              }
+              return b;
+            }),
+          })),
+        }));
+        return {
+          ...p,
+          layoutRows: updatedRows,
+          blocks: extractAllBlocksFromRows(updatedRows),
+        };
+      });
+      const reflowed = reflowPages(updatedPages);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+    });
+  },
+
+  updateTableTitle: (pageNumber, blockId, title) => {
+    set((state) => {
+      const updatedPages = state.pages.map((p) => {
+        const currentRows = getPageLayoutRows(p);
+        const updatedRows = currentRows.map((r) => ({
+          ...r,
+          columns: r.columns.map((c) => ({
+            ...c,
+            blocks: c.blocks.map((b) => {
+              if (b.type === "table" && isMatchingTableBlock(b, blockId)) {
+                return { ...b, title };
+              }
+              return b;
+            }),
+          })),
+        }));
+        return {
+          ...p,
+          layoutRows: updatedRows,
+          blocks: extractAllBlocksFromRows(updatedRows),
+        };
+      });
+      const reflowed = reflowPages(updatedPages);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+    });
+  },
+
+  updateTableColumnLabel: (pageNumber, blockId, columnId, label) => {
+    set((state) => {
+      const updatedPages = state.pages.map((p) => {
+        const currentRows = getPageLayoutRows(p);
+        const updatedRows = currentRows.map((r) => ({
+          ...r,
+          columns: r.columns.map((c) => ({
+            ...c,
+            blocks: c.blocks.map((b) => {
+              if (b.type === "table" && isMatchingTableBlock(b, blockId)) {
+                const existingCols =
+                  b.columns && b.columns.length > 0 ? b.columns : [...DEFAULT_TABLE_COLUMNS];
+                const updatedColumns = existingCols.map((col) => {
+                  if (col.id === columnId) {
+                    return { ...col, label };
+                  }
+                  return col;
+                });
+                return { ...b, columns: updatedColumns };
               }
               return b;
             }),

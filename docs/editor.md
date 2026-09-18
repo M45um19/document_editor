@@ -1,7 +1,7 @@
 # Feature Guide: Visual Editor & Canvas
 
 ## Overview
-The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, dynamic page grid layout management, interactive column border drag-resizing, and real-time styling controls via the properties sidebar.
+The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, inline table heading and column name customization, dynamic page grid layout management, interactive column border drag-resizing, interactive top/bottom row margin resizing, and real-time styling controls via the properties sidebar.
 
 ---
 
@@ -15,8 +15,8 @@ src/
 └── features/editor/
     ├── components/
     │   ├── ComponentToolbox.tsx   # Left dark sidebar (Tools, Quick Add, Page Thumbnails)
-    │   ├── EditorCanvas.tsx       # Center white sheet on slate canvas with A4 auto-pagination & drag-resizers
-    │   └── PropertiesPanel.tsx    # Right properties sidebar (Typography, Page Grid & Table controls)
+    │   ├── EditorCanvas.tsx       # Center white sheet on slate canvas with A4 auto-pagination, margin & col resizers
+    │   └── PropertiesPanel.tsx    # Right properties sidebar (Typography, Table Settings & Page Grid controls)
     ├── hooks/
     │   └── useEditorState.ts      # Central Zustand store for editor domain state, column widths & auto-persistence
     └── types/
@@ -76,14 +76,20 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
     * **Row 1 (Metadata Row):** 3 columns housing editable `TextBlock` elements for `ISSUER/\nIssuer Details`, `Client Details`, and `No/Date: C-2026-061\n2026-09-14` (right-aligned), fully customizable via row/column management and typography controls.
     * **Row 2 (Table Row):** 1 column housing the `QUOTATION ITEMS` table.
     * **Custom Continuation Rows:** Each row contains 1 or more columns (`columns: PageGridColumn[]`), and each column houses modular blocks or quick element add triggers (`+ Text`, `+ Table`, `+ Image`, `+ Divider`).
+* **Interactive Draggable Row Margins (`RowMarginHandle`):**
+  * Each grid row includes interactive **Top Margin** and **Bottom Margin** drag-and-drop resize handles.
+  * Dragging handles adjusts vertical spacing (`marginTop`, `marginBottom` from 0 to 300px) with live dashed guideline overlays and tooltip badges.
 * **Draggable Column Border Resizing:**
   * Draggable resize handles (`cursor-col-resize`) sit between adjacent column pairs.
   * Adjusting a divider line recalculates the left and right column percentage widths in real time (`handleResizeMouseDown`).
   * Enforces an `8%` minimum column width boundary to prevent column collapse.
   * Adjacent columns dynamically realign without breaking document flow.
+* **Inline Editable Table Heading & Column Names:**
+  * **Table Heading:** Direct inline input next to the spreadsheet icon to rename headings (e.g. `"QUOTATION ITEMS"`).
+  * **Column Names:** Each `<th>` header is an inline input allowing users to customize column labels (e.g. `"Item Detail"`, `"Qty"`, `"Unit Price"`, `"Amount"`, custom columns) directly in place.
 * **Idle vs. Hover vs. Selection Visual Modes:**
   * **Idle Mode (Unselected & Unhovered):** Document renders pristine and clean like a printed PDF. Table cell inputs are transparent and borderless without blue input boxes. Table action buttons (`+ Add Row`, `+ Add Col`, drag handles, bottom actions), row headers, and column divider lines remain invisible (`opacity-0 pointer-events-none`).
-  * **Hover Mode:** Hovering over a table or grid row smoothly fades in all edit action buttons, row drag handles, and draggable divider lines (`group-hover:opacity-100`).
+  * **Hover Mode:** Hovering over a table or grid row smoothly fades in all edit action buttons, row drag handles, margin resize handles, and draggable divider lines (`group-hover:opacity-100`).
   * **Selected Mode:** Clicking a block, cell, or grid row pins controls and active highlight halos (`border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10`) visible. Focused table cells receive active focus rings (`ring-2 ring-blue-500/40 bg-white`).
 
 ---
@@ -96,39 +102,35 @@ Right sidebar (`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px]`, white background, b
     * *Text Block*: Updates whole text block.
     * *Table Block*: Updates entire table's base typography.
     * *Table Cell*: Updates the specific clicked cell (e.g. `Table Cell: Row 2, Item Detail`).
-  * **Font Family:** Inter, Roboto, Outfit, Playfair Display, Merriweather, Fira Code.
+  * **Font Family:** Inter, Roboto, Outfit, Playfair Display, Merriweather, Fira Code, Arial, Georgia, Courier New.
   * **Font Size:** Numeric input + `+` / `-` incremental steppers.
   * **Font Weight:** Regular (400), Medium (500), Semibold (600), Bold (700).
   * **Text Color:** Native color picker with live hex code display.
   * **Text Alignment:** Left, Center, Right align toggles.
 * **Table Settings:**
-  * Width, Border style (`1px Solid #E5E7EB`), Padding (`0px`), and Row Spacing (`1px`).
+  * **Width:** Flexible input supporting `%`, `px`, or numeric values (e.g. `100%`, `85%`, `600px`).
+  * **Borders:** Preset dropdown (`1px Solid Light`, `1px Solid Slate`, `2px Solid Dark`, `2px Solid Blue`, `1px Dashed`, `1px Dotted`, `2px Double`, `None`).
+  * **Cell Padding:** Numeric input (`0px - 40px`) controlling cell vertical and horizontal breathing room.
+  * **Row Spacing:** Numeric input (`0px - 40px`) providing card-like row separation with separated borders.
 * **Page Grid Column & Row Management (Layout Level):**
   * **Column Management:** `[+ Add Column]` and `[Delete Column]` to manage columns within the active Page Grid Row. Adding or removing columns automatically normalizes percentage widths across all columns to sum to 100%.
-  * **Row Management:** `[+ Add Row]` and `[Delete Row]` to manage layout grid rows on the active document page.
+  * **Row Management:** `[+ Add Row]` and `[Delete Row]` to add or remove layout grid rows on the active document page.
 
 ---
 
-## Interactive Column Resizing System
+## Interactive Column & Row Resizing Systems
 
+### 1. Column Resizing Physics (`EditorCanvas.tsx`)
 The grid layout allows flexible column widths using fluid percentage values:
+- Each column in `PageGridColumn` carries an optional `width?: number` (percentage value, e.g. `20` for 20%).
+- If not explicitly set, columns default to equal shares (`Math.round(100 / colCount * 10) / 10`).
+- Dragging a divider between column $i$ and $i+1$ calculates $\Delta\% = \frac{\Delta x}{W_{px}} \times 100$ and constrains widths to $\ge 8\%$.
+- Commits updated widths via `updateRowColumnWidths(pageNum, rowId, updatedWidths)`.
 
-1. **State Representation:**
-   - Each column in `PageGridColumn` carries an optional `width?: number` (percentage value, e.g. `20` for 20%).
-   - If not explicitly set, columns default to equal shares (`Math.round(100 / colCount * 10) / 10`).
-
-2. **Drag Resizing Physics (`EditorCanvas.tsx`):**
-   - On `mousedown` over the resize divider handle between column $i$ and column $i+1$:
-     - Measures the parent row width in pixels ($W_{px}$).
-     - Calculates delta percentage: $\Delta\% = \frac{\Delta x}{W_{px}} \times 100$.
-     - Computes $W_{left}' = W_{left} + \Delta\%$ and $W_{right}' = W_{right} - \Delta\%$.
-     - Constrains both widths to $\ge 8\%$ minimum limit.
-     - Commits updated widths via `updateRowColumnWidths(pageNum, rowId, updatedWidths)`.
-   - Displays real-time tooltip badge with the rounded percentage width (e.g., `35%`).
-
-3. **Auto-Rebalancing:**
-   - When `addPageColumn` is called, all columns in the row are re-normalized equally (e.g., 5 columns = 20% each).
-   - When `deletePageColumn` is called, remaining columns scale proportionally to fill 100% width.
+### 2. Row Margin Resizing Physics (`EditorCanvas.tsx`)
+- Dragging top or bottom `RowMarginHandle` adjusts row spacing dynamically from `0px` to `300px`.
+- Real-time mouse movement updates `marginTop` or `marginBottom` on the parent row and renders guideline height indicators.
+- Commits margins via `updateRowMargins(pageNum, rowId, { marginTop, marginBottom })`.
 
 ---
 
@@ -150,38 +152,13 @@ The editor renders document pages in standard **A4 Sheet Dimensions** (`210mm ×
    - If the table contains more rows than fit on the current page, it splits:
      - `rows.slice(0, maxRowsThatFit)` stays on the current page.
      - The remaining rows overflow to a continuation table block on the next page (`${baseId}-split-${pageNum}`).
+     - Table styling (`tableWidth`, `borderStyle`, `padding`, `rowSpacing`, `title`) is preserved across split continuations.
 3. **Underflow & Pull-Back:**
    - When table rows or layout blocks are deleted, `mergeSplitTablesInRows` recombines all rows. If the entire table fits on Page 1, it pulls back automatically and removes trailing empty pages.
 4. **Transparent Cross-Fragment Operations:**
-   - All table mutation actions (`addTableRow`, `deleteTableRow`, `updateTableRow`, `updateTableCellStyle`, `addTableColumn`, `deleteTableColumn`, `removeElement`) resolve table blocks across pages using base ID matching (`isMatchingTableBlock`), allowing users to click `+ Add Row` on any page seamlessly.
+   - All table mutation actions (`addTableRow`, `deleteTableRow`, `updateTableRow`, `updateTableCellStyle`, `addTableColumn`, `deleteTableColumn`, `updateTableTitle`, `updateTableColumnLabel`, `removeElement`) resolve table blocks across pages using base ID matching (`isMatchingTableBlock`).
 5. **Auto-Navigation:**
    - Adding a table row that overflows to a new continuation page automatically focuses the newly created page.
-
-```typescript
-// Block height weight calculations
-export const getBlockWeight = (block: CanvasBlock): number => {
-  switch (block.type) {
-    case "table": {
-      const rowCount = block.rows ? block.rows.length : 0;
-      return Math.max(2.0, 2.0 + rowCount * 0.9);
-    }
-    case "text": {
-      const content = block.content || "";
-      const explicitLines = content.split("\n").length;
-      const wrappedLines = Math.floor(content.length / 50);
-      const totalLines = Math.max(1, explicitLines + wrappedLines);
-      const fontSizeMultiplier = (block.fontSize || 14) / 14;
-      return Math.max(0.8, 0.5 + totalLines * 0.4 * fontSizeMultiplier);
-    }
-    case "image":
-      return 3.5;
-    case "shape":
-      return 0.8;
-    default:
-      return 1.0;
-  }
-};
-```
 
 ---
 
@@ -220,7 +197,30 @@ export interface SelectedCellLocation {
   columnKey: string;
 }
 
-export interface TableBlock extends BlockTypographyStyle {
+export interface TableStyleSettings {
+  tableWidth?: string | number;
+  borderStyle?: string;
+  padding?: number;
+  rowSpacing?: number;
+}
+
+export interface BorderStyleOption {
+  label: string;
+  value: string;
+}
+
+export const DEFAULT_BORDER_STYLE_OPTIONS: BorderStyleOption[] = [
+  { label: "1px Solid Light (#E5E7EB)", value: "1px solid #E5E7EB" },
+  { label: "1px Solid Slate (#94A3B8)", value: "1px solid #94A3B8" },
+  { label: "2px Solid Dark (#1E293B)", value: "2px solid #1E293B" },
+  { label: "2px Solid Blue (#3B82F6)", value: "2px solid #3B82F6" },
+  { label: "1px Dashed (#CBD5E1)", value: "1px dashed #CBD5E1" },
+  { label: "1px Dotted (#94A3B8)", value: "1px dotted #94A3B8" },
+  { label: "2px Double (#CBD5E1)", value: "2px double #CBD5E1" },
+  { label: "None (Borderless)", value: "none" },
+];
+
+export interface TableBlock extends BlockTypographyStyle, TableStyleSettings {
   id: string;
   type: "table";
   title: string;
@@ -260,6 +260,8 @@ export interface PageGridColumn {
 export interface PageGridRow {
   id: string;
   columns: PageGridColumn[];
+  marginTop?: number;
+  marginBottom?: number;
 }
 
 export interface CanvasPage {
