@@ -37,7 +37,30 @@ export const DEFAULT_TABLE_COLUMNS: TableColumn[] = [
   { id: "amount", label: "Amount", align: "right", width: "w-24 sm:w-28", type: "calculated" },
 ];
 
-export interface TableBlock extends BlockTypographyStyle {
+export interface TableStyleSettings {
+  tableWidth?: string | number;
+  borderStyle?: string;
+  padding?: number;
+  rowSpacing?: number;
+}
+
+export interface BorderStyleOption {
+  label: string;
+  value: string;
+}
+
+export const DEFAULT_BORDER_STYLE_OPTIONS: BorderStyleOption[] = [
+  { label: "1px Solid Light (#E5E7EB)", value: "1px solid #E5E7EB" },
+  { label: "1px Solid Slate (#94A3B8)", value: "1px solid #94A3B8" },
+  { label: "2px Solid Dark (#1E293B)", value: "2px solid #1E293B" },
+  { label: "2px Solid Blue (#3B82F6)", value: "2px solid #3B82F6" },
+  { label: "1px Dashed (#CBD5E1)", value: "1px dashed #CBD5E1" },
+  { label: "1px Dotted (#94A3B8)", value: "1px dotted #94A3B8" },
+  { label: "2px Double (#CBD5E1)", value: "2px double #CBD5E1" },
+  { label: "None (Borderless)", value: "none" },
+];
+
+export interface TableBlock extends BlockTypographyStyle, TableStyleSettings {
   id: string;
   type: "table";
   title: string;
@@ -76,13 +99,6 @@ export interface TextStyleSettings {
   align: "left" | "center" | "right";
 }
 
-export interface TableStyleSettings {
-  width: number;
-  borderStyle: string;
-  padding: number;
-  rowSpacing: number;
-}
-
 export interface DocumentMetadata {
   projectName?: string;
   companyName: string;
@@ -103,6 +119,10 @@ export interface PageGridColumn {
 export interface PageGridRow {
   id: string;
   columns: PageGridColumn[];
+  marginTop?: number;
+  marginBottom?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
 }
 
 export interface CanvasPage {

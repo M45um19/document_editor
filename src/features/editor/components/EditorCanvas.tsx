@@ -27,6 +27,87 @@ import {
   DEFAULT_TABLE_COLUMNS,
   FONT_FAMILY_MAP,
 } from "../types";
+import {
+  DndContext,
+  useDraggable,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragMoveEvent,
+  DragEndEvent,
+} from "@dnd-kit/core";
+
+interface RowMarginHandleProps {
+  rowId: string;
+  edge: "top" | "bottom";
+  currentMargin: number;
+  isRowSelected: boolean;
+  isBeingResized: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
+}
+
+function RowMarginHandle({
+  rowId,
+  edge,
+  currentMargin,
+  isRowSelected,
+  isBeingResized,
+  onMouseDown,
+}: RowMarginHandleProps) {
+  const { attributes, listeners, setNodeRef } = useDraggable({
+    id: `row-margin-${edge}-${rowId}`,
+    data: {
+      type: "row-margin",
+      rowId,
+      edge,
+      initialMargin: currentMargin,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onMouseDown={onMouseDown}
+      onClick={(e) => e.stopPropagation()}
+      title={`Drag up or down to adjust row ${edge} margin (${currentMargin}px)`}
+      className={`absolute left-0 right-0 h-4.5 z-30 cursor-row-resize flex items-center justify-center group/margin-handle select-none transition-opacity ${
+        edge === "top" ? "-top-2.5" : "-bottom-2.5"
+      } ${
+        isRowSelected || isBeingResized
+          ? "opacity-100"
+          : "opacity-0 group-hover/gridrow:opacity-100"
+      }`}
+    >
+      {/* Horizontal Guideline */}
+      <div
+        className={`w-full transition-all rounded-full ${
+          isBeingResized
+            ? "bg-blue-600 h-[2.5px] shadow-xs"
+            : "bg-slate-300/80 h-[1.5px] group-hover/margin-handle:bg-blue-500 group-hover/margin-handle:h-[2px]"
+        }`}
+      />
+
+      {/* Interactive Center Handle Pill */}
+      <div
+        className={`absolute px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1.5 transition-all shadow-xs border whitespace-nowrap ${
+          isBeingResized
+            ? "bg-blue-600 text-white border-blue-700 scale-105 shadow-md z-40"
+            : "bg-white text-slate-600 border-slate-200 group-hover/margin-handle:border-blue-400 group-hover/margin-handle:text-blue-600 group-hover/margin-handle:shadow-xs"
+        }`}
+      >
+        <span className="text-[10px] leading-none">↕</span>
+        <span>
+          {edge === "top" ? "Top" : "Bottom"} Margin: {currentMargin}px
+        </span>
+      </div>
+    </div>
+  );
+}
+
+
 
 interface AutoExpandingTextareaProps {
   value: string;
@@ -104,12 +185,15 @@ export function EditorCanvas() {
   const deleteTableRow = useEditorState((s) => s.deleteTableRow);
   const addTableColumn = useEditorState((s) => s.addTableColumn);
   const deleteTableColumn = useEditorState((s) => s.deleteTableColumn);
+  const updateTableTitle = useEditorState((s) => s.updateTableTitle);
+  const updateTableColumnLabel = useEditorState((s) => s.updateTableColumnLabel);
 
   const addPageRow = useEditorState((s) => s.addPageRow);
   const deletePageRow = useEditorState((s) => s.deletePageRow);
   const addPageColumn = useEditorState((s) => s.addPageColumn);
   const deletePageColumn = useEditorState((s) => s.deletePageColumn);
   const updateRowColumnWidths = useEditorState((s) => s.updateRowColumnWidths);
+  const updateRowMargins = useEditorState((s) => s.updateRowMargins);
   const addElementToColumn = useEditorState((s) => s.addElementToColumn);
   const removeElement = useEditorState((s) => s.removeElement);
 
@@ -120,6 +204,112 @@ export function EditorCanvas() {
     leftWidth: number;
     rightWidth: number;
   } | null>(null);
+
+  const [resizingMarginInfo, setResizingMarginInfo] = React.useState<{
+    rowId: string;
+    edge: "top" | "bottom";
+    value: number;
+  } | null>(null);
+
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 1,
+    },
+  });
+  const sensors = useSensors(pointerSensor);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const data = event.active.data.current;
+    if (data?.type === "row-margin") {
+      setResizingMarginInfo({
+        rowId: data.rowId,
+        edge: data.edge,
+        value: data.initialMargin,
+      });
+    }
+  };
+
+  const handleDragMove = (event: DragMoveEvent) => {
+    const data = event.active.data.current;
+    if (data?.type === "row-margin") {
+      const { rowId, edge, initialMargin } = data;
+      const newMargin = Math.max(0, Math.min(300, Math.round(initialMargin + event.delta.y)));
+      setResizingMarginInfo({
+        rowId,
+        edge,
+        value: newMargin,
+      });
+      updateRowMargins(activePage, rowId, {
+        [edge === "top" ? "marginTop" : "marginBottom"]: newMargin,
+      });
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const data = event.active.data.current;
+    if (data?.type === "row-margin") {
+      const { rowId, edge, initialMargin } = data;
+      const finalMargin = Math.max(0, Math.min(300, Math.round(initialMargin + event.delta.y)));
+      updateRowMargins(activePage, rowId, {
+        [edge === "top" ? "marginTop" : "marginBottom"]: finalMargin,
+      });
+      setResizingMarginInfo(null);
+    }
+  };
+
+  const handleMarginResizeMouseDown = (
+    e: React.MouseEvent,
+    row: PageGridRow,
+    edge: "top" | "bottom",
+    pageNum: number
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const initialMargin =
+      edge === "top" ? (row.marginTop ?? 0) : (row.marginBottom ?? 16);
+    const startY = e.clientY;
+
+    setResizingMarginInfo({
+      rowId: row.id,
+      edge,
+      value: initialMargin,
+    });
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      let newMargin = Math.max(0, Math.min(300, initialMargin + deltaY));
+      newMargin = Math.round(newMargin);
+
+      setResizingMarginInfo({
+        rowId: row.id,
+        edge,
+        value: newMargin,
+      });
+
+      updateRowMargins(pageNum, row.id, {
+        [edge === "top" ? "marginTop" : "marginBottom"]: newMargin,
+      });
+    };
+
+    const onMouseUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setResizingMarginInfo(null);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+
 
   const handleResizeMouseDown = (
     e: React.MouseEvent,
@@ -277,6 +467,39 @@ export function EditorCanvas() {
           };
         };
 
+        // Table formatting options
+        const rawWidth = tableBlock.tableWidth ?? "100%";
+        let formattedTableWidth = "100%";
+        if (typeof rawWidth === "number") {
+          formattedTableWidth = `${rawWidth}%`;
+        } else if (typeof rawWidth === "string") {
+          const trimmed = rawWidth.trim();
+          if (!trimmed) {
+            formattedTableWidth = "100%";
+          } else if (
+            trimmed.endsWith("%") ||
+            trimmed.endsWith("px") ||
+            trimmed.endsWith("rem") ||
+            trimmed.endsWith("em") ||
+            trimmed.endsWith("vw")
+          ) {
+            formattedTableWidth = trimmed;
+          } else {
+            const num = Number(trimmed);
+            if (!isNaN(num)) {
+              formattedTableWidth = num <= 100 ? `${num}%` : `${num}px`;
+            } else {
+              formattedTableWidth = trimmed;
+            }
+          }
+        }
+
+        const borderStyle = tableBlock.borderStyle || "1px solid #E5E7EB";
+        const isNoBorder = borderStyle === "none";
+        const cellPadding = tableBlock.padding !== undefined ? tableBlock.padding : 8;
+        const rowSpacing = tableBlock.rowSpacing !== undefined ? tableBlock.rowSpacing : 0;
+        const hasRowSpacing = rowSpacing > 0;
+
         return (
           <div
             key={tableBlock.id}
@@ -296,9 +519,17 @@ export function EditorCanvas() {
                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
                   <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
-                <h3 className="text-xs sm:text-sm md:text-base font-bold text-slate-800 tracking-wide uppercase truncate">
-                  {tableBlock.title}
-                </h3>
+                <input
+                  type="text"
+                  value={tableBlock.title ?? ""}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) =>
+                    updateTableTitle(pageNum, tableBlock.id, e.target.value)
+                  }
+                  placeholder="QUOTATION ITEMS"
+                  className="text-xs sm:text-sm md:text-base font-bold text-slate-800 tracking-wide uppercase bg-transparent hover:bg-slate-100/80 focus:bg-white focus:ring-2 focus:ring-blue-500/30 rounded px-1.5 py-0.5 outline-none transition max-w-[180px] xs:max-w-[240px] sm:max-w-xs md:max-w-md cursor-text"
+                  title="Click to edit table heading"
+                />
                 {/* Styling summary badge - visible on hover or select */}
                 <div
                   className={`items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200/90 text-[10px] text-slate-500 font-medium shadow-2xs transition-opacity ${
@@ -313,7 +544,9 @@ export function EditorCanvas() {
                   />
                   <span className="truncate max-w-[80px]">{fontFamily}</span>
                   <span>•</span>
-                  <span>{fontSize}</span>
+                  <span>{formattedTableWidth}</span>
+                  <span>•</span>
+                  <span>Pad: {cellPadding}px</span>
                   <span>•</span>
                   <span>{columns.length} Cols</span>
                 </div>
@@ -367,23 +600,72 @@ export function EditorCanvas() {
               </div>
             </div>
 
-            {/* Table Container with Horizontal Scroll */}
-            <div className="overflow-x-auto w-full -mx-1 px-1">
-              <table className="min-w-[500px] w-full text-left border-collapse">
+            {/* Table Container with Horizontal Scroll & Alignment */}
+            <div
+              className="overflow-x-auto w-full -mx-1 px-1 flex"
+              style={{
+                justifyContent:
+                  tableBlock.align === "center"
+                    ? "center"
+                    : tableBlock.align === "right"
+                    ? "flex-end"
+                    : "flex-start",
+              }}
+            >
+              <table
+                style={{
+                  width: formattedTableWidth,
+                  maxWidth: "100%",
+                  borderCollapse: hasRowSpacing ? "separate" : "collapse",
+                  borderSpacing: hasRowSpacing ? `0 ${rowSpacing}px` : undefined,
+                }}
+                className="min-w-[480px] text-left"
+              >
                 <thead>
-                  <tr className="bg-slate-50/80 text-slate-700 text-xs sm:text-sm font-bold border-y border-slate-200/80">
+                  <tr
+                    style={{
+                      borderTop: isNoBorder ? "none" : borderStyle,
+                      borderBottom: isNoBorder ? "none" : borderStyle,
+                    }}
+                    className="bg-slate-50/80 text-slate-700 text-xs sm:text-sm font-bold"
+                  >
                     <th
-                      className={`py-2.5 sm:py-3 px-1 w-7 text-center transition-opacity ${
+                      style={{
+                        paddingTop: `${cellPadding}px`,
+                        paddingBottom: `${cellPadding}px`,
+                        paddingLeft: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
+                        paddingRight: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
+                        borderBottom: isNoBorder ? "none" : borderStyle,
+                      }}
+                      className={`w-7 text-center transition-opacity ${
                         isSelected
                           ? "opacity-100"
                           : "opacity-0 group-hover/table:opacity-100"
                       }`}
                     />
-                    <th className="py-2.5 sm:py-3 px-2 sm:px-3 w-10 sm:w-12 text-center">#</th>
+                    <th
+                      style={{
+                        paddingTop: `${cellPadding}px`,
+                        paddingBottom: `${cellPadding}px`,
+                        paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
+                        paddingRight: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
+                        borderBottom: isNoBorder ? "none" : borderStyle,
+                      }}
+                      className="w-10 sm:w-12 text-center"
+                    >
+                      #
+                    </th>
                     {columns.map((col) => (
                       <th
                         key={col.id}
-                        className={`py-2.5 sm:py-3 px-2 sm:px-3 ${col.width || ""} ${
+                        style={{
+                          paddingTop: `${cellPadding}px`,
+                          paddingBottom: `${cellPadding}px`,
+                          paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                          paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                          borderBottom: isNoBorder ? "none" : borderStyle,
+                        }}
+                        className={`${col.width || ""} ${
                           col.align === "center"
                             ? "text-center"
                             : col.align === "right"
@@ -391,38 +673,115 @@ export function EditorCanvas() {
                             : "text-left"
                         }`}
                       >
-                        {col.label}
+                        <input
+                          type="text"
+                          value={col.label ?? ""}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            updateTableColumnLabel(
+                              pageNum,
+                              tableBlock.id,
+                              col.id,
+                              e.target.value
+                            )
+                          }
+                          placeholder="Column"
+                          className={`w-full bg-transparent font-bold text-slate-700 text-xs sm:text-sm hover:bg-slate-200/50 focus:bg-white focus:ring-2 focus:ring-blue-500/30 rounded px-1.5 py-0.5 outline-none transition cursor-text ${
+                            col.align === "center"
+                              ? "text-center"
+                              : col.align === "right"
+                              ? "text-right"
+                              : "text-left"
+                          }`}
+                          title="Click to edit column name"
+                        />
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="text-xs sm:text-sm divide-y divide-slate-100">
+                <tbody className="text-xs sm:text-sm">
                   {tableBlock.rows.map((row, index) => (
-                    <tr key={row.id} className="group/row hover:bg-slate-50/50 transition">
+                    <tr
+                      key={row.id}
+                      style={{
+                        borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+                      }}
+                      className={`group/row hover:bg-slate-50/50 transition ${
+                        hasRowSpacing ? "bg-white shadow-2xs rounded-lg" : ""
+                      }`}
+                    >
                       {/* Drag Handle */}
                       <td
-                        className={`py-2 sm:py-2.5 px-1 text-center text-slate-300 group-hover/row:text-slate-500 cursor-grab transition-opacity ${
+                        style={{
+                          paddingTop: `${cellPadding}px`,
+                          paddingBottom: `${cellPadding}px`,
+                          paddingLeft: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
+                          paddingRight: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
+                          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+                          ...(hasRowSpacing && !isNoBorder
+                            ? {
+                                borderTop: borderStyle,
+                                borderBottom: borderStyle,
+                                borderLeft: borderStyle,
+                              }
+                            : {}),
+                        }}
+                        className={`text-center text-slate-300 group-hover/row:text-slate-500 cursor-grab transition-opacity ${
                           isSelected
                             ? "opacity-100"
                             : "opacity-0 group-hover/table:opacity-100"
-                        }`}
+                        } ${hasRowSpacing ? "rounded-l-lg" : ""}`}
                       >
                         <GripVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 mx-auto" />
                       </td>
 
                       {/* Row Index */}
-                      <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center font-bold text-slate-700">
+                      <td
+                        style={{
+                          paddingTop: `${cellPadding}px`,
+                          paddingBottom: `${cellPadding}px`,
+                          paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
+                          paddingRight: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
+                          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+                          ...(hasRowSpacing && !isNoBorder
+                            ? { borderTop: borderStyle, borderBottom: borderStyle }
+                            : {}),
+                        }}
+                        className="text-center font-bold text-slate-700"
+                      >
                         {index + 1}
                       </td>
 
                       {/* Dynamic Columns Rendering */}
-                      {columns.map((col) => {
+                      {columns.map((col, colIdx) => {
                         const isSelectedCell = isCellSelected(row.id, col.id);
                         const cellStyle = getEffectiveCellStyle(row, col.id, col.align);
+                        const isLastCol = colIdx === columns.length - 1;
+
+                        const commonCellBorder = {
+                          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+                          ...(hasRowSpacing && !isNoBorder
+                            ? {
+                                borderTop: borderStyle,
+                                borderBottom: borderStyle,
+                                ...(isLastCol ? { borderRight: borderStyle } : {}),
+                              }
+                            : {}),
+                        };
 
                         if (col.id === "item") {
                           return (
-                            <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3">
+                            <td
+                              key={col.id}
+                              style={{
+                                paddingTop: `${cellPadding}px`,
+                                paddingBottom: `${cellPadding}px`,
+                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                ...commonCellBorder,
+                              }}
+                              className={hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}
+                            >
                               <input
                                 type="text"
                                 value={row.item ?? ""}
@@ -441,7 +800,7 @@ export function EditorCanvas() {
                                   )
                                 }
                                 style={cellStyle}
-                                className={`border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
+                                className={`border rounded-md px-2.5 sm:px-3 py-1 w-full outline-none transition-all ${
                                   isSelectedCell
                                     ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
                                     : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
@@ -453,7 +812,17 @@ export function EditorCanvas() {
 
                         if (col.id === "qty") {
                           return (
-                            <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">
+                            <td
+                              key={col.id}
+                              style={{
+                                paddingTop: `${cellPadding}px`,
+                                paddingBottom: `${cellPadding}px`,
+                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                ...commonCellBorder,
+                              }}
+                              className={`text-center ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
+                            >
                               <input
                                 type="number"
                                 value={row.qty ?? 0}
@@ -472,7 +841,7 @@ export function EditorCanvas() {
                                   )
                                 }
                                 style={cellStyle}
-                                className={`border rounded-md px-2 sm:px-2.5 py-1 sm:py-1.5 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
+                                className={`border rounded-md px-2 sm:px-2.5 py-1 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
                                   isSelectedCell
                                     ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
                                     : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
@@ -484,7 +853,17 @@ export function EditorCanvas() {
 
                         if (col.id === "unitPrice") {
                           return (
-                            <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">
+                            <td
+                              key={col.id}
+                              style={{
+                                paddingTop: `${cellPadding}px`,
+                                paddingBottom: `${cellPadding}px`,
+                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                ...commonCellBorder,
+                              }}
+                              className={`text-center ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
+                            >
                               <input
                                 type="text"
                                 value={row.unitPrice ?? ""}
@@ -521,12 +900,19 @@ export function EditorCanvas() {
                                 e.stopPropagation();
                                 handleCellFocus(row.id, col.id);
                               }}
-                              style={cellStyle}
-                              className={`py-2 sm:py-2.5 px-2 sm:px-3 text-right cursor-pointer rounded-md transition-all ${
+                              style={{
+                                ...cellStyle,
+                                paddingTop: `${cellPadding}px`,
+                                paddingBottom: `${cellPadding}px`,
+                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                                ...commonCellBorder,
+                              }}
+                              className={`text-right cursor-pointer rounded-md transition-all ${
                                 isSelectedCell
                                   ? "ring-2 ring-blue-500/40 bg-blue-50/60 font-semibold"
                                   : "hover:bg-slate-100/60"
-                              }`}
+                              } ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
                             >
                               {row.amount}
                             </td>
@@ -541,7 +927,17 @@ export function EditorCanvas() {
                             : "";
 
                         return (
-                          <td key={col.id} className="py-2 sm:py-2.5 px-2 sm:px-3">
+                          <td
+                            key={col.id}
+                            style={{
+                              paddingTop: `${cellPadding}px`,
+                              paddingBottom: `${cellPadding}px`,
+                              paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                              paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                              ...commonCellBorder,
+                            }}
+                            className={hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}
+                          >
                             <input
                               type="text"
                               value={displayVal}
@@ -560,7 +956,7 @@ export function EditorCanvas() {
                                 )
                               }
                               style={cellStyle}
-                              className={`border rounded-md px-2.5 sm:px-3 py-1 sm:py-1.5 w-full outline-none transition-all ${
+                              className={`border rounded-md px-2.5 sm:px-3 py-1 w-full outline-none transition-all ${
                                 isSelectedCell
                                   ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
                                   : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
@@ -929,247 +1325,339 @@ export function EditorCanvas() {
           )}
 
           {/* Dynamic Page Layout Grid Container */}
-          <div className="space-y-4 sm:space-y-6">
-            {getPageLayoutRows(currentPage).map((row, rowIdx) => {
-              const isRowSelected = selectedRowId === row.id;
-              const colCount = Math.max(1, row.columns.length);
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex flex-col w-full">
+              {getPageLayoutRows(currentPage).map((row, rowIdx) => {
+                const isRowSelected = selectedRowId === row.id;
+                const colCount = Math.max(1, row.columns.length);
 
-              return (
-                <div
-                  key={row.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedRowId(row.id);
-                    if (row.columns[0]) {
-                      setSelectedColumnId(row.columns[0].id);
-                    }
-                  }}
-                  className={`transition-all rounded-xl relative group/gridrow ${
-                    isRowSelected
-                      ? "p-2 sm:p-2.5 border border-blue-300/80 bg-blue-50/15 ring-1 ring-blue-400/20"
-                      : "p-0 border border-transparent hover:border-slate-200/60 bg-transparent"
-                  }`}
-                >
-                  {/* Row Header Helper Label (Visible when row is selected or on hover) */}
+                const isResizingTop =
+                  resizingMarginInfo?.rowId === row.id && resizingMarginInfo.edge === "top";
+                const isResizingBottom =
+                  resizingMarginInfo?.rowId === row.id && resizingMarginInfo.edge === "bottom";
+
+                const effectiveMarginTop = isResizingTop
+                  ? resizingMarginInfo.value
+                  : (row.marginTop ?? 0);
+                const effectiveMarginBottom = isResizingBottom
+                  ? resizingMarginInfo.value
+                  : (row.marginBottom ?? 16);
+
+                return (
                   <div
-                    className={`items-center justify-between mb-1.5 px-1 transition-opacity duration-150 ${
+                    key={row.id}
+                    style={{
+                      marginTop: `${effectiveMarginTop}px`,
+                      marginBottom: `${effectiveMarginBottom}px`,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedRowId(row.id);
+                      if (row.columns[0]) {
+                        setSelectedColumnId(row.columns[0].id);
+                      }
+                    }}
+                    className={`transition-[margin] duration-75 rounded-xl relative group/gridrow py-1 ${
                       isRowSelected
-                        ? "flex opacity-100"
-                        : "flex opacity-0 group-hover/gridrow:opacity-100 pointer-events-none group-hover/gridrow:pointer-events-auto"
+                        ? "border border-blue-300/80 bg-blue-50/15 ring-1 ring-blue-400/20"
+                        : "border border-transparent hover:border-slate-200/60 bg-transparent"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Row {rowIdx + 1} ({colCount} Column{colCount > 1 ? "s" : ""})
-                      </span>
-                      {isRowSelected && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
-                          Active Grid Row
-                        </span>
-                      )}
-                    </div>
+                    {/* Top Margin Drag & Drop Resize Handle */}
+                    <RowMarginHandle
+                      rowId={row.id}
+                      edge="top"
+                      currentMargin={effectiveMarginTop}
+                      isRowSelected={isRowSelected}
+                      isBeingResized={isResizingTop}
+                      onMouseDown={(e) =>
+                        handleMarginResizeMouseDown(
+                          e,
+                          row,
+                          "top",
+                          currentPage.pageNumber
+                        )
+                      }
+                    />
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRowId(row.id);
-                          addPageColumn(currentPage.pageNumber, row.id);
+                    {/* Top Margin Active Guideline Zone */}
+                    {isResizingTop && (
+                      <div
+                        className="absolute left-0 right-0 pointer-events-none z-20 flex items-center justify-center border-b-2 border-dashed border-blue-500 bg-blue-500/10 text-blue-700 text-[10px] font-bold rounded"
+                        style={{
+                          height: `${effectiveMarginTop}px`,
+                          top: `-${effectiveMarginTop}px`,
                         }}
-                        className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded px-2 py-0.5 transition cursor-pointer shadow-2xs"
                       >
-                        <Plus className="w-3 h-3" />
-                        <span>Add Column</span>
-                      </button>
-                      {colCount > 1 && (
+                        <span className="bg-white/90 px-2 py-0.5 rounded shadow-2xs border border-blue-200">
+                          Top Spacing: {effectiveMarginTop}px
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Row Header Helper Label (Visible when row is selected or on hover) */}
+                    <div
+                      className={`items-center justify-between mb-1.5 px-1 transition-opacity duration-150 ${
+                        isRowSelected
+                          ? "flex opacity-100"
+                          : "flex opacity-0 group-hover/gridrow:opacity-100 pointer-events-none group-hover/gridrow:pointer-events-auto"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Row {rowIdx + 1} ({colCount} Column{colCount > 1 ? "s" : ""})
+                        </span>
+                        {isRowSelected && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
+                            Active Grid Row
+                          </span>
+                        )}
+                        <span className="text-[9px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
+                          Margin: {effectiveMarginTop}px Top / {effectiveMarginBottom}px Bottom
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deletePageColumn(currentPage.pageNumber, row.id);
-                          }}
-                          className="text-[11px] font-medium text-slate-400 hover:text-red-600 px-1.5 py-0.5 transition cursor-pointer"
-                        >
-                          Delete Col
-                        </button>
-                      )}
-                      {getPageLayoutRows(currentPage).length > 1 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deletePageRow(currentPage.pageNumber, row.id);
-                          }}
-                          aria-label="Delete grid row"
-                          className="text-slate-400 hover:text-red-600 p-1 rounded transition cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Responsive Column Flex Container with Percentage Widths & Draggable Resizers */}
-                  <div
-                    ref={(el) => {
-                      rowRefs.current[row.id] = el;
-                    }}
-                    className="flex flex-row items-stretch w-full relative"
-                  >
-                    {row.columns.map((col, colIdx) => {
-                      const isColSelected =
-                        selectedRowId === row.id && selectedColumnId === col.id;
-                      const effectiveWidth =
-                        col.width ?? Math.round((100 / colCount) * 10) / 10;
-                      const isBeingResized =
-                        resizingInfo?.rowId === row.id &&
-                        (resizingInfo.colIdx === colIdx || resizingInfo.colIdx + 1 === colIdx);
-
-                      return (
-                        <div
-                          key={col.id}
-                          style={{ width: `${effectiveWidth}%` }}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedRowId(row.id);
-                            setSelectedColumnId(col.id);
+                            addPageColumn(currentPage.pageNumber, row.id);
                           }}
-                          className={`flex flex-col gap-2 min-w-0 relative shrink-0 px-1 sm:px-1.5 transition-[width] duration-75 ${
-                            isColSelected && isRowSelected
-                              ? "ring-1 ring-blue-400/40 bg-blue-50/10 rounded-lg"
-                              : ""
-                          }`}
+                          className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded px-2 py-0.5 transition cursor-pointer shadow-2xs"
                         >
-                          {/* Active Resize Width Badge */}
-                          {isBeingResized && (
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full shadow-xs pointer-events-none">
-                              {Math.round(effectiveWidth)}%
-                            </div>
-                          )}
+                          <Plus className="w-3 h-3" />
+                          <span>Add Column</span>
+                        </button>
+                        {colCount > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePageColumn(currentPage.pageNumber, row.id);
+                            }}
+                            className="text-[11px] font-medium text-slate-400 hover:text-red-600 px-1.5 py-0.5 transition cursor-pointer"
+                          >
+                            Delete Col
+                          </button>
+                        )}
+                        {getPageLayoutRows(currentPage).length > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePageRow(currentPage.pageNumber, row.id);
+                            }}
+                            aria-label="Delete grid row"
+                            className="text-slate-400 hover:text-red-600 p-1 rounded transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-                          {col.blocks.length > 0 ? (
-                            col.blocks.map((block) =>
-                              renderBlock(block, currentPage.pageNumber)
-                            )
-                          ) : (
-                            <div
-                              className={`py-6 sm:py-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-center p-2 sm:p-4 space-y-2 transition-all ${
-                                isRowSelected
-                                  ? "border-blue-300/80 bg-blue-50/20"
-                                  : "border-slate-200/80 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/10"
-                              }`}
-                            >
-                              <span className="text-xs font-semibold text-slate-500">
-                                Column {colIdx + 1} ({Math.round(effectiveWidth)}%)
-                              </span>
-                              <span className="text-[11px] text-slate-400">
-                                Click to add element:
-                              </span>
-                              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    addElementToColumn(
-                                      currentPage.pageNumber,
-                                      row.id,
-                                      col.id,
-                                      "text"
-                                    );
-                                  }}
-                                  className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
-                                >
-                                  + Text
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    addElementToColumn(
-                                      currentPage.pageNumber,
-                                      row.id,
-                                      col.id,
-                                      "table"
-                                    );
-                                  }}
-                                  className="px-2.5 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200 text-xs font-medium hover:bg-blue-100 transition cursor-pointer shadow-2xs"
-                                >
-                                  + Table
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    addElementToColumn(
-                                      currentPage.pageNumber,
-                                      row.id,
-                                      col.id,
-                                      "image"
-                                    );
-                                  }}
-                                  className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
-                                >
-                                  + Image
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    addElementToColumn(
-                                      currentPage.pageNumber,
-                                      row.id,
-                                      col.id,
-                                      "shape"
-                                    );
-                                  }}
-                                  className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
-                                >
-                                  + Divider
-                                </button>
+                    {/* Responsive Column Flex Container with Percentage Widths & Draggable Resizers */}
+                    <div
+                      ref={(el) => {
+                        rowRefs.current[row.id] = el;
+                      }}
+                      className="flex flex-row items-stretch w-full relative"
+                    >
+                      {row.columns.map((col, colIdx) => {
+                        const isColSelected =
+                          selectedRowId === row.id && selectedColumnId === col.id;
+                        const effectiveWidth =
+                          col.width ?? Math.round((100 / colCount) * 10) / 10;
+                        const isBeingResized =
+                          resizingInfo?.rowId === row.id &&
+                          (resizingInfo.colIdx === colIdx || resizingInfo.colIdx + 1 === colIdx);
+
+                        return (
+                          <div
+                            key={col.id}
+                            style={{ width: `${effectiveWidth}%` }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRowId(row.id);
+                              setSelectedColumnId(col.id);
+                            }}
+                            className={`flex flex-col gap-2 min-w-0 relative shrink-0 px-1 sm:px-1.5 transition-[width] duration-75 ${
+                              isColSelected && isRowSelected
+                                ? "ring-1 ring-blue-400/40 bg-blue-50/10 rounded-lg"
+                                : ""
+                            }`}
+                          >
+                            {/* Active Resize Width Badge */}
+                            {isBeingResized && (
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full shadow-xs pointer-events-none">
+                                {Math.round(effectiveWidth)}%
                               </div>
-                            </div>
-                          )}
+                            )}
 
-                          {/* Draggable Border Resize Handle between adjacent columns */}
-                          {colIdx < row.columns.length - 1 && (
-                            <div
-                              onMouseDown={(e) =>
-                                handleResizeMouseDown(
-                                  e,
-                                  row,
-                                  colIdx,
-                                  currentPage.pageNumber
-                                )
-                              }
-                              onClick={(e) => e.stopPropagation()}
-                              title="Drag border to resize column width"
-                              className={`absolute -right-2 top-0 bottom-0 w-4 z-30 cursor-col-resize flex items-center justify-center group/resizer select-none transition-opacity ${
-                                isRowSelected || isBeingResized
-                                  ? "opacity-100"
-                                  : "opacity-0 group-hover/gridrow:opacity-100"
-                              }`}
-                            >
+                            {col.blocks.length > 0 ? (
+                              col.blocks.map((block) =>
+                                renderBlock(block, currentPage.pageNumber)
+                              )
+                            ) : (
                               <div
-                                className={`w-[2px] h-full transition-all rounded-full ${
-                                  isBeingResized
-                                    ? "bg-blue-600 w-[3px] shadow-xs"
-                                    : "bg-slate-300 group-hover/resizer:bg-blue-500 group-hover/resizer:w-[3px]"
+                                className={`py-6 sm:py-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-center p-2 sm:p-4 space-y-2 transition-all ${
+                                  isRowSelected
+                                    ? "border-blue-300/80 bg-blue-50/20"
+                                    : "border-slate-200/80 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/10"
                                 }`}
-                              />
-                              <div className="opacity-0 group-hover/resizer:opacity-100 absolute -top-5 px-1.5 py-0.5 bg-slate-900 text-white text-[9px] font-semibold rounded shadow-md pointer-events-none transition-opacity whitespace-nowrap z-40">
-                                ↔ Resize
+                              >
+                                <span className="text-xs font-semibold text-slate-500">
+                                  Column {colIdx + 1} ({Math.round(effectiveWidth)}%)
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  Click to add element:
+                                </span>
+                                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addElementToColumn(
+                                        currentPage.pageNumber,
+                                        row.id,
+                                        col.id,
+                                        "text"
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                                  >
+                                    + Text
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addElementToColumn(
+                                        currentPage.pageNumber,
+                                        row.id,
+                                        col.id,
+                                        "table"
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200 text-xs font-medium hover:bg-blue-100 transition cursor-pointer shadow-2xs"
+                                  >
+                                    + Table
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addElementToColumn(
+                                        currentPage.pageNumber,
+                                        row.id,
+                                        col.id,
+                                        "image"
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                                  >
+                                    + Image
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addElementToColumn(
+                                        currentPage.pageNumber,
+                                        row.id,
+                                        col.id,
+                                        "shape"
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 text-xs font-medium hover:bg-slate-50 transition cursor-pointer shadow-2xs"
+                                  >
+                                    + Divider
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            )}
+
+                            {/* Draggable Border Resize Handle between adjacent columns */}
+                            {colIdx < row.columns.length - 1 && (
+                              <div
+                                onMouseDown={(e) =>
+                                  handleResizeMouseDown(
+                                    e,
+                                    row,
+                                    colIdx,
+                                    currentPage.pageNumber
+                                  )
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                title="Drag border to resize column width"
+                                className={`absolute -right-2 top-0 bottom-0 w-4 z-30 cursor-col-resize flex items-center justify-center group/resizer select-none transition-opacity ${
+                                  isRowSelected || isBeingResized
+                                    ? "opacity-100"
+                                    : "opacity-0 group-hover/gridrow:opacity-100"
+                                }`}
+                              >
+                                <div
+                                  className={`w-[2px] h-full transition-all rounded-full ${
+                                    isBeingResized
+                                      ? "bg-blue-600 w-[3px] shadow-xs"
+                                      : "bg-slate-300 group-hover/resizer:bg-blue-500 group-hover/resizer:w-[3px]"
+                                  }`}
+                                />
+                                <div className="opacity-0 group-hover/resizer:opacity-100 absolute -top-5 px-1.5 py-0.5 bg-slate-900 text-white text-[9px] font-semibold rounded shadow-md pointer-events-none transition-opacity whitespace-nowrap z-40">
+                                  ↔ Resize
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+
+
+                    {/* Bottom Margin Active Guideline Zone */}
+                    {isResizingBottom && (
+                      <div
+                        className="absolute left-0 right-0 pointer-events-none z-20 flex items-center justify-center border-t-2 border-dashed border-blue-500 bg-blue-500/10 text-blue-700 text-[10px] font-bold rounded"
+                        style={{
+                          height: `${effectiveMarginBottom}px`,
+                          bottom: `-${effectiveMarginBottom}px`,
+                        }}
+                      >
+                        <span className="bg-white/90 px-2 py-0.5 rounded shadow-2xs border border-blue-200">
+                          Bottom Spacing: {effectiveMarginBottom}px
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Bottom Margin Drag & Drop Resize Handle */}
+                    <RowMarginHandle
+                      rowId={row.id}
+                      edge="bottom"
+                      currentMargin={effectiveMarginBottom}
+                      isRowSelected={isRowSelected}
+                      isBeingResized={isResizingBottom}
+                      onMouseDown={(e) =>
+                        handleMarginResizeMouseDown(
+                          e,
+                          row,
+                          "bottom",
+                          currentPage.pageNumber
+                        )
+                      }
+                    />
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </DndContext>
 
           <div className="mt-3 flex justify-center">
             <button
