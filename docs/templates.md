@@ -1,7 +1,7 @@
 # Feature Guide: Template Manager & Persistence
 
 ## Overview
-The Templates feature (`src/features/templates/`) manages template persistence, multi-template tab synchronization, and distinct per-template LocalStorage slots. It ensures each template maintains its own independent design, pages, layout rows, blocks, and metadata across browser sessions.
+The Templates feature (`src/features/templates/`) manages template persistence, multi-template tab synchronization, and distinct per-template LocalStorage slots. It ensures each template maintains its own independent design, pages, layout rows, blocks, and metadata across browser sessions, while providing automatic migration for legacy template payloads.
 
 ---
 
@@ -75,13 +75,14 @@ Each template is completely isolated in `localStorage` to ensure independent edi
 
 ### Step-by-Step Lifecycle Rules
 
-1. **Application Mount:**
+1. **Application Mount & Auto-Migration:**
    - The system checks `localStorage` for `document_editor_templates_list`.
-   - The active template's dedicated payload is read from `doc_template_data_${activeTemplateId}` and hydrated into the canvas via `useEditorState.loadTemplate()`.
+   - The active template's dedicated payload is read from `doc_template_data_${activeTemplateId}`.
+   - `getTemplateData` verifies that Page 1 contains the modern `page-row-header` and `page-row-divider` grid rows. If missing (legacy snapshot), it automatically migrates the structure before loading into the editor canvas.
 
 2. **Template Creation via `+` in `TabBar`:**
    - Auto-saves current active template.
-   - Generates a new ID (e.g. `template-2`) and writes initial default document structure into `doc_template_data_template-2`.
+   - Generates a new ID (e.g. `template-2`) and writes the initial default document structure (`INITIAL_TEMPLATE_DATA`) into `doc_template_data_template-2`.
    - Appends to templates list, sets as active, and populates the canvas.
 
 3. **Switching Templates:**

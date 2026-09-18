@@ -1,7 +1,7 @@
 # Feature Guide: Visual Editor & Canvas
 
 ## Overview
-The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, inline table heading and column name customization, dynamic page grid layout management, interactive column border drag-resizing, interactive top/bottom row margin resizing, and real-time styling controls via the properties sidebar.
+The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, inline table heading and column name customization, dynamic page grid layout management, interactive column border drag-resizing, canvas-driven top/bottom row margin resizing, and real-time styling controls via the properties sidebar.
 
 ---
 
@@ -16,7 +16,7 @@ src/
     ├── components/
     │   ├── ComponentToolbox.tsx   # Left dark sidebar (Tools, Quick Add, Page Thumbnails)
     │   ├── EditorCanvas.tsx       # Center white sheet on slate canvas with A4 auto-pagination, margin & col resizers
-    │   └── PropertiesPanel.tsx    # Right properties sidebar (Typography, Table Settings & Page Grid controls)
+    │   └── PropertiesPanel.tsx    # Right properties sidebar (Typography, Image/Logo, Divider, Table & Page Grid)
     ├── hooks/
     │   └── useEditorState.ts      # Central Zustand store for editor domain state, column widths & auto-persistence
     └── types/
@@ -48,7 +48,7 @@ Fixed left sidebar (`bg-[#081225]` dark theme, `w-52` to `w-80` responsive width
   * `Select`: Activates pointer selection mode (default active tool).
   * `Text Block`: Inserts a clean editable text block into the active page.
   * `Simple Table`: Inserts an interactive data table with default columns into the active page.
-  * `Image`: Inserts an image / diagram block with placeholder asset preview.
+  * `Image`: Inserts an image / logo block with preset icon or custom upload.
   * `Shape`: Inserts a decorative geometric gradient divider.
 * **Quick Add Actions:**
   * `[+ Add Simple Table]`: Appends a new data table node to the canvas.
@@ -71,26 +71,30 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
 * **Document Sheet Container (`#document-sheet`):**
   * Exact standard A4 dimensions (`max-w-[794px] min-h-[1123px]`).
   * Clicking the blank document sheet clears active selection and resets canvas to clean document mode.
-  * **Page 1 Branding Header:** Logo mark, editable company name (`"Your Company"`), tagline, compact document title (`"VISUAL DOCUMENT"`), and accent divider line.
-  * **Page Grid Layout Rows:** Document content is structured into multi-column grid rows (`layoutRows: PageGridRow[]`):
-    * **Row 1 (Metadata Row):** 3 columns housing editable `TextBlock` elements for `ISSUER/\nIssuer Details`, `Client Details`, and `No/Date: C-2026-061\n2026-09-14` (right-aligned), fully customizable via row/column management and typography controls.
-    * **Row 2 (Table Row):** 1 column housing the `QUOTATION ITEMS` table.
-    * **Custom Continuation Rows:** Each row contains 1 or more columns (`columns: PageGridColumn[]`), and each column houses modular blocks or quick element add triggers (`+ Text`, `+ Table`, `+ Image`, `+ Divider`).
-* **Interactive Draggable Row Margins (`RowMarginHandle`):**
-  * Each grid row includes interactive **Top Margin** and **Bottom Margin** drag-and-drop resize handles.
-  * Dragging handles adjusts vertical spacing (`marginTop`, `marginBottom` from 0 to 300px) with live dashed guideline overlays and tooltip badges.
+  * **Dynamic Page Grid Layout Rows:** All document content (including headers) is structured into modular grid rows (`layoutRows: PageGridRow[]`):
+    * **Row 1 (`page-row-header`):** 3 columns housing:
+      * *Column 1 (`col-header-logo`, 8% width):* ImageBlock with preset blue geometric icon or uploaded logo asset.
+      * *Column 2 (`col-header-company`, 52% width):* TextBlock for `"Your Company"` (22px bold) + TextBlock for `"Better Documents, Better Business"` (12px muted).
+      * *Column 3 (`col-header-title`, 40% width):* TextBlock for `"VISUAL DOCUMENT"` (22px bold, right-aligned).
+    * **Row 2 (`page-row-divider`):** 1 column (100% width) housing a decorative ShapeBlock accent line (`1.5px` height, blue gradient).
+    * **Row 3 (`page-row-meta`):** 3 columns housing editable `TextBlock` elements for `ISSUER/\nIssuer Details`, `Client Details`, and `No/Date: C-2026-061\n2026-09-14`.
+    * **Row 4 (`page-row-table`):** 1 column housing the `QUOTATION ITEMS` data table.
+    * **Continuation Rows:** Multi-column rows containing text, tables, images, or dividers.
+* **Canvas-Driven ↕ Row Margin Resizing (`RowMarginHandle`):**
+  * Each grid row includes interactive **Top Margin** and **Bottom Margin** drag handles on the canvas.
+  * Dragging handles adjusts vertical spacing (`marginTop`, `marginBottom` from `0px` to `300px`) with live dashed guideline overlays and tooltip badges.
+  * Row toolbars are positioned absolutely (`absolute -top-7`) and rows use `py-0`, ensuring that when margins are set to `0px`, rows sit tightly together with zero phantom gap.
 * **Draggable Column Border Resizing:**
   * Draggable resize handles (`cursor-col-resize`) sit between adjacent column pairs.
   * Adjusting a divider line recalculates the left and right column percentage widths in real time (`handleResizeMouseDown`).
   * Enforces an `8%` minimum column width boundary to prevent column collapse.
-  * Adjacent columns dynamically realign without breaking document flow.
 * **Inline Editable Table Heading & Column Names:**
   * **Table Heading:** Direct inline input next to the spreadsheet icon to rename headings (e.g. `"QUOTATION ITEMS"`).
-  * **Column Names:** Each `<th>` header is an inline input allowing users to customize column labels (e.g. `"Item Detail"`, `"Qty"`, `"Unit Price"`, `"Amount"`, custom columns) directly in place.
+  * **Column Names:** Each `<th>` header is an inline input allowing users to customize column labels directly in place.
 * **Idle vs. Hover vs. Selection Visual Modes:**
-  * **Idle Mode (Unselected & Unhovered):** Document renders pristine and clean like a printed PDF. Table cell inputs are transparent and borderless without blue input boxes. Table action buttons (`+ Add Row`, `+ Add Col`, drag handles, bottom actions), row headers, and column divider lines remain invisible (`opacity-0 pointer-events-none`).
-  * **Hover Mode:** Hovering over a table or grid row smoothly fades in all edit action buttons, row drag handles, margin resize handles, and draggable divider lines (`group-hover:opacity-100`).
-  * **Selected Mode:** Clicking a block, cell, or grid row pins controls and active highlight halos (`border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10`) visible. Focused table cells receive active focus rings (`ring-2 ring-blue-500/40 bg-white`).
+  * **Idle Mode (Unselected & Unhovered):** Pristine printed document look. Inputs are transparent and borderless. Action buttons, row headers, and column dividers remain invisible (`opacity-0 pointer-events-none`).
+  * **Hover Mode:** Fades in edit buttons, row drag handles, margin resize handles, and divider lines (`group-hover:opacity-100`).
+  * **Selected Mode:** Pins controls and active highlight halos (`border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10`).
 
 ---
 
@@ -98,23 +102,30 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
 Right sidebar (`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px]`, white background, bordered left).
 
 * **Context-Aware Typography Settings:**
-  * Target indicator displays current selection context:
-    * *Text Block*: Updates whole text block.
-    * *Table Block*: Updates entire table's base typography.
-    * *Table Cell*: Updates the specific clicked cell (e.g. `Table Cell: Row 2, Item Detail`).
+  * Target indicator displays current selection context: Text Block, Table Block, or specific Table Cell.
   * **Font Family:** Inter, Roboto, Outfit, Playfair Display, Merriweather, Fira Code, Arial, Georgia, Courier New.
-  * **Font Size:** Numeric input + `+` / `-` incremental steppers.
-  * **Font Weight:** Regular (400), Medium (500), Semibold (600), Bold (700).
+  * **Font Size:** Numeric input + incremental steppers.
+  * **Font Weight:** Regular (400), Medium (500), Semibold (600), Bold (700), ExtraBold (800).
   * **Text Color:** Native color picker with live hex code display.
   * **Text Alignment:** Left, Center, Right align toggles.
+* **Image & Logo Settings (Contextual):**
+  * Displays when an Image block or Logo preset is selected.
+  * **Image Source Toggle:** Switch between Preset Blue Logo and Upload Image / Custom URL.
+  * **Size Inputs:** Width and Height (supports px and % values).
+  * **Size Presets:** Quick buttons for Logo (42px), 80px, Medium (140px), Full (100%).
+  * **Alignment:** Left, Center, Right alignment.
+* **Divider Settings (Contextual):**
+  * Displays when a Shape divider block is selected.
+  * **Color:** Native color picker and hex code input.
+  * **Thickness / Height:** Numeric input for line thickness in pixels.
 * **Table Settings:**
-  * **Width:** Flexible input supporting `%`, `px`, or numeric values (e.g. `100%`, `85%`, `600px`).
+  * **Width:** Flexible input (`100%`, `85%`, `600px`).
   * **Borders:** Preset dropdown (`1px Solid Light`, `1px Solid Slate`, `2px Solid Dark`, `2px Solid Blue`, `1px Dashed`, `1px Dotted`, `2px Double`, `None`).
-  * **Cell Padding:** Numeric input (`0px - 40px`) controlling cell vertical and horizontal breathing room.
-  * **Row Spacing:** Numeric input (`0px - 40px`) providing card-like row separation with separated borders.
-* **Page Grid Column & Row Management (Layout Level):**
+  * **Cell Padding:** Numeric input (`0px - 40px`).
+  * **Row Spacing:** Numeric input (`0px - 40px`).
+* **Page Grid Column & Row Management:**
   * **Column Management:** `[+ Add Column]` and `[Delete Column]` to manage columns within the active Page Grid Row. Adding or removing columns automatically normalizes percentage widths across all columns to sum to 100%.
-  * **Row Management:** `[+ Add Row]` and `[Delete Row]` to add or remove layout grid rows on the active document page.
+  * **Row Management:** `[+ Add Row]` and `[Delete Row]` to add or remove layout grid rows on the active document page. (Vertical row margins are managed directly via the visual handles on the canvas).
 
 ---
 
@@ -138,8 +149,8 @@ The grid layout allows flexible column widths using fluid percentage values:
 
 The editor renders document pages in standard **A4 Sheet Dimensions** (`210mm × 297mm` / `max-w-[794px] min-h-[1123px]`):
 
-* **Page 1 Capacity (`PAGE_1_CAPACITY = 13.0` height units)**: Accounts for company branding header, document title, and the 3-column metadata grid (`ISSUER/`, `CLIENT/`, `No/Date:`).
-* **Continuation Page Capacity (`PAGE_N_CAPACITY = 19.0` height units)**: Continuation pages feature a compact header and expanded usable content capacity.
+* **Page 1 Capacity (`PAGE_1_CAPACITY = 13.0` height units)**: Accounts for dynamic header row, divider row, and the 3-column metadata grid.
+* **Continuation Page Capacity (`PAGE_N_CAPACITY = 19.0` height units)**: Continuation pages feature a compact continuation header and expanded usable content capacity.
 
 ### Bi-Directional Reflow & Table Row Splitting System (`reflowPages`)
 
@@ -156,7 +167,7 @@ The editor renders document pages in standard **A4 Sheet Dimensions** (`210mm ×
 3. **Underflow & Pull-Back:**
    - When table rows or layout blocks are deleted, `mergeSplitTablesInRows` recombines all rows. If the entire table fits on Page 1, it pulls back automatically and removes trailing empty pages.
 4. **Transparent Cross-Fragment Operations:**
-   - All table mutation actions (`addTableRow`, `deleteTableRow`, `updateTableRow`, `updateTableCellStyle`, `addTableColumn`, `deleteTableColumn`, `updateTableTitle`, `updateTableColumnLabel`, `removeElement`) resolve table blocks across pages using base ID matching (`isMatchingTableBlock`).
+   - All table mutation actions resolve table blocks across pages using base ID matching (`isMatchingTableBlock`).
 5. **Auto-Navigation:**
    - Adding a table row that overflows to a new continuation page automatically focuses the newly created page.
 
@@ -239,7 +250,12 @@ export interface ImageBlock {
   id: string;
   type: "image";
   url?: string;
-  caption: string;
+  caption?: string;
+  width?: number | string;
+  height?: number | string;
+  align?: "left" | "center" | "right";
+  borderRadius?: number;
+  isLogoPreset?: boolean;
 }
 
 export interface ShapeBlock {
@@ -247,6 +263,8 @@ export interface ShapeBlock {
   type: "shape";
   shapeType: "divider" | "banner" | "badge";
   color?: string;
+  height?: number;
+  width?: string;
 }
 
 export type CanvasBlock = TableBlock | TextBlock | ImageBlock | ShapeBlock;
@@ -262,6 +280,8 @@ export interface PageGridRow {
   columns: PageGridColumn[];
   marginTop?: number;
   marginBottom?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
 }
 
 export interface CanvasPage {

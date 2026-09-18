@@ -14,11 +14,16 @@ import {
   Plus,
   Trash2,
   X,
+  ImageIcon,
+  Shapes,
+  Upload,
 } from "lucide-react";
 import { useEditorState, getPageLayoutRows } from "../hooks/useEditorState";
 import {
   TextBlock,
   TableBlock,
+  ImageBlock,
+  ShapeBlock,
   BlockTypographyStyle,
   FONT_FAMILY_MAP,
   AVAILABLE_FONTS,
@@ -41,6 +46,8 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
   const setSelectedCell = useEditorState((s) => s.setSelectedCell);
   const selectedRowId = useEditorState((s) => s.selectedRowId);
   const updateBlockStyle = useEditorState((s) => s.updateBlockStyle);
+  const updateImageBlock = useEditorState((s) => s.updateImageBlock);
+  const updateShapeBlock = useEditorState((s) => s.updateShapeBlock);
   const updateTableCellStyle = useEditorState((s) => s.updateTableCellStyle);
   const addElement = useEditorState((s) => s.addElement);
 
@@ -49,21 +56,28 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
   const addPageColumn = useEditorState((s) => s.addPageColumn);
   const deletePageColumn = useEditorState((s) => s.deletePageColumn);
 
-  // Find active or first text/table block on current page
+  // Find active or first block on current page
   const currentPageObj = pages.find((p) => p.pageNumber === activePage) || pages[0];
   const currentBlocks = currentPageObj?.blocks || [];
-  const selectedBlock = currentBlocks.find(
+
+  const selectedAnyBlock = currentBlocks.find((b) => b.id === selectedBlockId);
+  const selectedImageBlock =
+    selectedAnyBlock?.type === "image" ? (selectedAnyBlock as ImageBlock) : undefined;
+  const selectedShapeBlock =
+    selectedAnyBlock?.type === "shape" ? (selectedAnyBlock as ShapeBlock) : undefined;
+
+  const selectedTextOrTableBlock = currentBlocks.find(
     (b) => b.id === selectedBlockId && (b.type === "text" || b.type === "table")
   ) as (TextBlock | TableBlock) | undefined;
-  const firstBlock = currentBlocks.find((b) => b.type === "text" || b.type === "table") as
-    | (TextBlock | TableBlock)
-    | undefined;
-  const activeBlock = selectedBlock || firstBlock;
+  const firstTextOrTableBlock = currentBlocks.find(
+    (b) => b.type === "text" || b.type === "table"
+  ) as (TextBlock | TableBlock) | undefined;
+  const activeBlock = selectedTextOrTableBlock || firstTextOrTableBlock;
 
   // Active table block (either directly selected, or containing the selected cell, or first table on page)
   const activeTable = (
-    selectedBlock?.type === "table"
-      ? selectedBlock
+    selectedTextOrTableBlock?.type === "table"
+      ? selectedTextOrTableBlock
       : currentBlocks.find((b) => b.type === "table")
   ) as TableBlock | undefined;
 
@@ -190,6 +204,301 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
           </button>
         )}
       </div>
+
+      {/* Image / Logo Settings Section (Shown when an Image block is selected) */}
+      {selectedImageBlock && (
+        <div className="space-y-3 2xl:space-y-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2 border-b-2 border-blue-600 pb-1 2xl:pb-1.5 w-fit text-blue-600 font-bold text-xs 2xl:text-sm">
+            <ImageIcon className="w-4 h-4 2xl:w-4.5 2xl:h-4.5" />
+            <span>Image & Logo Settings</span>
+          </div>
+
+          <div className="px-2.5 py-1.5 rounded-md bg-blue-50/70 border border-blue-200 text-xs text-blue-900 font-semibold flex items-center justify-between">
+            <span>
+              Target: {selectedImageBlock.isLogoPreset ? "Preset Logo Icon" : "Image Asset"}
+            </span>
+            <span className="text-[10px] text-blue-600 bg-white px-1.5 py-0.5 rounded border border-blue-200">
+              {typeof selectedImageBlock.width === "number"
+                ? `${selectedImageBlock.width}px`
+                : selectedImageBlock.width || "44px"}
+            </span>
+          </div>
+
+          {/* Preset Logo vs Custom Upload Toggle */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] 2xl:text-xs font-medium text-slate-600 block">
+              Image Source
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, {
+                    isLogoPreset: true,
+                    url: undefined,
+                  })
+                }
+                className={`py-1.5 px-2 rounded-md text-xs font-semibold border transition cursor-pointer text-center ${
+                  selectedImageBlock.isLogoPreset && !selectedImageBlock.url
+                    ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                Preset Blue Logo
+              </button>
+              <label
+                className={`py-1.5 px-2 rounded-md text-xs font-semibold border transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+                  selectedImageBlock.url
+                    ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <Upload className="w-3 h-3" />
+                <span>Upload Image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                          updateImageBlock(activePage, selectedImageBlock.id, {
+                            url: reader.result,
+                            isLogoPreset: false,
+                          });
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Image URL Input (if custom) */}
+          {selectedImageBlock.url && (
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-600 block">
+                Image URL / Data
+              </label>
+              <input
+                type="text"
+                value={selectedImageBlock.url.startsWith("data:") ? "(Uploaded image data)" : selectedImageBlock.url}
+                onChange={(e) =>
+                  updateImageBlock(activePage, selectedImageBlock.id, {
+                    url: e.target.value,
+                    isLogoPreset: false,
+                  })
+                }
+                placeholder="https://example.com/logo.png"
+                className="w-full text-xs font-medium text-slate-800 border border-slate-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-500 bg-white"
+              />
+            </div>
+          )}
+
+          {/* Size Controls */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-600 block">Width</label>
+              <div className="flex items-center border border-slate-200 rounded-md px-2 py-1 bg-white focus-within:border-blue-500">
+                <input
+                  type="text"
+                  value={selectedImageBlock.width ?? (selectedImageBlock.isLogoPreset ? 44 : "100%")}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const num = parseInt(val, 10);
+                    updateImageBlock(activePage, selectedImageBlock.id, {
+                      width: !isNaN(num) && String(num) === val ? num : val,
+                    });
+                  }}
+                  placeholder="44"
+                  className="w-full text-xs font-medium text-slate-800 outline-none bg-transparent"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-600 block">Height</label>
+              <div className="flex items-center border border-slate-200 rounded-md px-2 py-1 bg-white focus-within:border-blue-500">
+                <input
+                  type="text"
+                  value={selectedImageBlock.height ?? (selectedImageBlock.isLogoPreset ? 44 : "auto")}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const num = parseInt(val, 10);
+                    updateImageBlock(activePage, selectedImageBlock.id, {
+                      height: !isNaN(num) && String(num) === val ? num : val,
+                    });
+                  }}
+                  placeholder="44"
+                  className="w-full text-xs font-medium text-slate-800 outline-none bg-transparent"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Size Preset Buttons */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+              Size Presets
+            </label>
+            <div className="grid grid-cols-4 gap-1">
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, {
+                    width: 44,
+                    height: 44,
+                  })
+                }
+                className="py-1 px-1 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition cursor-pointer"
+              >
+                Logo (44)
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, {
+                    width: 80,
+                    height: 80,
+                  })
+                }
+                className="py-1 px-1 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition cursor-pointer"
+              >
+                80px
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, {
+                    width: 140,
+                    height: "auto",
+                  })
+                }
+                className="py-1 px-1 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition cursor-pointer"
+              >
+                Medium
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, {
+                    width: "100%",
+                    height: "auto",
+                  })
+                }
+                className="py-1 px-1 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-700 transition cursor-pointer"
+              >
+                Full
+              </button>
+            </div>
+          </div>
+
+          {/* Alignment */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-600 block">Alignment</label>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, { align: "left" })
+                }
+                className={`p-1.5 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                  (selectedImageBlock.align || "left") === "left"
+                    ? "border-blue-200 bg-blue-50 text-blue-600 shadow-xs"
+                    : "border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                }`}
+              >
+                <AlignLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, { align: "center" })
+                }
+                className={`p-1.5 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                  selectedImageBlock.align === "center"
+                    ? "border-blue-200 bg-blue-50 text-blue-600 shadow-xs"
+                    : "border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                }`}
+              >
+                <AlignCenter className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  updateImageBlock(activePage, selectedImageBlock.id, { align: "right" })
+                }
+                className={`p-1.5 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                  selectedImageBlock.align === "right"
+                    ? "border-blue-200 bg-blue-50 text-blue-600 shadow-xs"
+                    : "border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                }`}
+              >
+                <AlignRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shape / Divider Settings Section (Shown when a Shape block is selected) */}
+      {selectedShapeBlock && (
+        <div className="space-y-3 2xl:space-y-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2 border-b-2 border-blue-600 pb-1 2xl:pb-1.5 w-fit text-blue-600 font-bold text-xs 2xl:text-sm">
+            <Shapes className="w-4 h-4 2xl:w-4.5 2xl:h-4.5" />
+            <span>Divider Settings</span>
+          </div>
+
+          {/* Color & Thickness Grid */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-600 block">Color</label>
+              <div className="flex items-center gap-1.5 border border-slate-200 rounded-md px-2 py-1 bg-white focus-within:border-blue-500">
+                <input
+                  type="color"
+                  value={selectedShapeBlock.color || "#3b82f6"}
+                  onChange={(e) =>
+                    updateShapeBlock(activePage, selectedShapeBlock.id, { color: e.target.value })
+                  }
+                  className="w-4 h-4 rounded-xs border border-slate-300 shrink-0 cursor-pointer p-0 bg-transparent"
+                />
+                <input
+                  type="text"
+                  value={selectedShapeBlock.color || "#3b82f6"}
+                  onChange={(e) =>
+                    updateShapeBlock(activePage, selectedShapeBlock.id, { color: e.target.value })
+                  }
+                  className="w-full text-xs font-medium text-slate-800 outline-none bg-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-600 block">Thickness</label>
+              <div className="flex items-center border border-slate-200 rounded-md px-2 py-1 bg-white focus-within:border-blue-500">
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={selectedShapeBlock.height ?? 2}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    updateShapeBlock(activePage, selectedShapeBlock.id, {
+                      height: isNaN(val) ? 2 : val,
+                    });
+                  }}
+                  className="w-full text-xs font-medium text-slate-800 outline-none bg-transparent"
+                />
+                <span className="text-[10px] text-slate-400 font-medium">px</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Text Settings Section */}
       <div className="space-y-3 2xl:space-y-4">
