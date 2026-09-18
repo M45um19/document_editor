@@ -15,7 +15,10 @@ import {
   PageGridColumn,
   DEFAULT_TABLE_COLUMNS,
   TableBlock,
+  ImageBlock,
+  ShapeBlock,
   TableStyleSettings,
+  BlockUpdatePayload,
 } from "../types";
 
 export interface EditorStoreState {
@@ -91,7 +94,17 @@ export interface EditorStoreState {
   updateBlockStyle: (
     pageNumber: number,
     blockId: string,
-    style: Partial<BlockTypographyStyle & TableStyleSettings>
+    style: BlockUpdatePayload
+  ) => void;
+  updateImageBlock: (
+    pageNumber: number,
+    blockId: string,
+    updates: Partial<ImageBlock>
+  ) => void;
+  updateShapeBlock: (
+    pageNumber: number,
+    blockId: string,
+    updates: Partial<ShapeBlock>
   ) => void;
   updateTableSettings: (
     pageNumber: number,
@@ -160,14 +173,104 @@ export const INITIAL_TABLE_ROWS: TableRowItem[] = [
 
 export const INITIAL_PAGE_ROWS: PageGridRow[] = [
   {
+    id: "page-row-header",
+    marginTop: 0,
+    marginBottom: 8,
+    paddingTop: 0,
+    paddingBottom: 0,
+    columns: [
+      {
+        id: "col-header-logo",
+        width: 8,
+        blocks: [
+          {
+            id: "header-logo-1",
+            type: "image",
+            caption: "Company Logo",
+            isLogoPreset: true,
+            width: 42,
+            height: 42,
+            align: "left",
+            borderRadius: 8,
+          },
+        ],
+      },
+      {
+        id: "col-header-company",
+        width: 52,
+        blocks: [
+          {
+            id: "header-company-name",
+            type: "text",
+            content: "Your Company",
+            fontFamily: "Inter",
+            fontSize: 22,
+            fontWeight: "800",
+            color: "#0f172a",
+            align: "left",
+          },
+          {
+            id: "header-company-tagline",
+            type: "text",
+            content: "Better Documents, Better Business",
+            fontFamily: "Inter",
+            fontSize: 12,
+            fontWeight: "500",
+            color: "#64748b",
+            align: "left",
+          },
+        ],
+      },
+      {
+        id: "col-header-title",
+        width: 40,
+        blocks: [
+          {
+            id: "header-doc-title",
+            type: "text",
+            content: "VISUAL DOCUMENT",
+            fontFamily: "Inter",
+            fontSize: 22,
+            fontWeight: "900",
+            color: "#0f172a",
+            align: "right",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "page-row-divider",
+    marginTop: 0,
+    marginBottom: 14,
+    paddingTop: 0,
+    paddingBottom: 0,
+    columns: [
+      {
+        id: "col-divider-main",
+        width: 100,
+        blocks: [
+          {
+            id: "header-divider-1",
+            type: "shape",
+            shapeType: "divider",
+            color: "#2563eb",
+            height: 1.5,
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "page-row-meta",
     marginTop: 0,
     marginBottom: 16,
-    paddingTop: 6,
-    paddingBottom: 6,
+    paddingTop: 0,
+    paddingBottom: 0,
     columns: [
       {
         id: "col-meta-issuer",
+        width: 33.3,
         blocks: [
           {
             id: "meta-block-issuer",
@@ -175,14 +278,15 @@ export const INITIAL_PAGE_ROWS: PageGridRow[] = [
             content: "ISSUER/\nIssuer Details",
             fontFamily: "Inter",
             fontSize: 13,
-            fontWeight: "600",
-            color: "#1e293b",
+            fontWeight: "700",
+            color: "#0f172a",
             align: "left",
           },
         ],
       },
       {
         id: "col-meta-client",
+        width: 33.3,
         blocks: [
           {
             id: "meta-block-client",
@@ -190,14 +294,15 @@ export const INITIAL_PAGE_ROWS: PageGridRow[] = [
             content: "Client Details",
             fontFamily: "Inter",
             fontSize: 13,
-            fontWeight: "600",
-            color: "#1e293b",
+            fontWeight: "700",
+            color: "#0f172a",
             align: "left",
           },
         ],
       },
       {
         id: "col-meta-nodate",
+        width: 33.4,
         blocks: [
           {
             id: "meta-block-nodate",
@@ -205,8 +310,8 @@ export const INITIAL_PAGE_ROWS: PageGridRow[] = [
             content: "No/Date:  C-2026-061\n2026-09-14",
             fontFamily: "Inter",
             fontSize: 13,
-            fontWeight: "600",
-            color: "#1e293b",
+            fontWeight: "700",
+            color: "#0f172a",
             align: "right",
           },
         ],
@@ -217,11 +322,12 @@ export const INITIAL_PAGE_ROWS: PageGridRow[] = [
     id: "page-row-table",
     marginTop: 0,
     marginBottom: 16,
-    paddingTop: 6,
-    paddingBottom: 6,
+    paddingTop: 0,
+    paddingBottom: 0,
     columns: [
       {
         id: "col-table-main",
+        width: 100,
         blocks: [
           {
             id: "initial-table-1",
@@ -271,8 +377,8 @@ export const getPageLayoutRows = (page: CanvasPage): PageGridRow[] => {
 };
 
 // A4 Page Capacity Constants (in height units ~50px)
-export const PAGE_1_CAPACITY = 13.0; // ~650px usable content space on Page 1
-export const PAGE_N_CAPACITY = 19.0; // ~950px usable content space on Continuation Pages
+export const PAGE_1_CAPACITY = 16.0; // Usable content space on Page 1
+export const PAGE_N_CAPACITY = 19.0; // Usable content space on Continuation Pages
 
 export const getPageCapacity = (pageNumber: number): number => {
   return pageNumber === 1 ? PAGE_1_CAPACITY : PAGE_N_CAPACITY;
@@ -291,12 +397,14 @@ export const getBlockWeight = (block: CanvasBlock): number => {
       const wrappedLines = Math.floor(content.length / 55);
       const totalLines = Math.max(1, explicitLines + wrappedLines);
       const fontSizeMultiplier = (block.fontSize || 14) / 14;
-      return Math.max(0.8, 0.5 + totalLines * 0.45 * fontSizeMultiplier);
+      return Math.max(0.6, 0.4 + totalLines * 0.4 * fontSizeMultiplier);
     }
-    case "image":
-      return 4.5;
+    case "image": {
+      const isLogo = (block as ImageBlock).isLogoPreset || ((block as ImageBlock).width && Number((block as ImageBlock).width) <= 80);
+      return isLogo ? 0.9 : 4.5;
+    }
     case "shape":
-      return 1.0;
+      return 0.4;
     default:
       return 1.0;
   }
@@ -548,8 +656,8 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   activeTemplateId: "template-1",
   selectedBlockId: null,
   selectedCell: null,
-  selectedRowId: "page-row-meta",
-  selectedColumnId: "col-meta-issuer",
+  selectedRowId: "page-row-header",
+  selectedColumnId: "col-header-company",
   metadata: INITIAL_METADATA,
   pages: [
     {
@@ -911,7 +1019,22 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   loadTemplate: (snapshot, templateId) => {
     if (!snapshot || !snapshot.pages || snapshot.pages.length === 0) return;
-    const reflowed = reflowPages(snapshot.pages);
+    let pagesToLoad = snapshot.pages;
+    const page1 = pagesToLoad[0];
+    const rows = getPageLayoutRows(page1);
+    const hasHeaderRow = rows.some(
+      (r) => r.id === "page-row-header" || r.columns?.some((c) => c.id === "col-header-company")
+    );
+    if (!hasHeaderRow) {
+      const updatedPage1: CanvasPage = {
+        ...page1,
+        layoutRows: [INITIAL_PAGE_ROWS[0], INITIAL_PAGE_ROWS[1], ...rows],
+        blocks: extractAllBlocksFromRows([INITIAL_PAGE_ROWS[0], INITIAL_PAGE_ROWS[1], ...rows]),
+      };
+      pagesToLoad = [updatedPage1, ...pagesToLoad.slice(1)];
+    }
+
+    const reflowed = reflowPages(pagesToLoad);
     set((state) => ({
       activeTemplateId: templateId || state.activeTemplateId,
       metadata: snapshot.metadata || INITIAL_METADATA,
@@ -944,8 +1067,8 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         activePage: 1,
         selectedBlockId: null,
         selectedCell: null,
-        selectedRowId: "page-row-meta",
-        selectedColumnId: "col-meta-issuer",
+        selectedRowId: "page-row-header",
+        selectedColumnId: "col-header-company",
         saveMessage: "Reset to default template",
       };
     });
@@ -994,13 +1117,20 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       newBlock = {
         id: blockId,
         type: "image",
-        caption: "Uploaded Diagram / Reference Asset",
+        caption: "Document Image Asset",
+        width: 120,
+        height: "auto",
+        align: "left",
+        borderRadius: 8,
       };
     } else {
       newBlock = {
         id: blockId,
         type: "shape",
         shapeType: "divider",
+        color: "#3b82f6",
+        height: 2,
+        width: "100%",
       };
     }
 
@@ -1106,13 +1236,20 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         newBlock = {
           id: blockId,
           type: "image",
-          caption: "Uploaded Diagram / Reference Asset",
+          caption: "Document Image Asset",
+          width: 120,
+          height: "auto",
+          align: "left",
+          borderRadius: 8,
         };
       } else {
         newBlock = {
           id: blockId,
           type: "shape",
           shapeType: "divider",
+          color: "#3b82f6",
+          height: 2,
+          width: "100%",
         };
       }
 
@@ -1233,7 +1370,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
             ...c,
             blocks: c.blocks.map((b) => {
               if (b.id === blockId || isMatchingTableBlock(b, blockId)) {
-                return { ...b, ...style };
+                return { ...b, ...style } as CanvasBlock;
               }
               return b;
             }),
@@ -1253,6 +1390,14 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   updateTextBlockStyle: (pageNumber, blockId, style) => {
     get().updateBlockStyle(pageNumber, blockId, style);
+  },
+
+  updateImageBlock: (pageNumber, blockId, updates) => {
+    get().updateBlockStyle(pageNumber, blockId, updates);
+  },
+
+  updateShapeBlock: (pageNumber, blockId, updates) => {
+    get().updateBlockStyle(pageNumber, blockId, updates);
   },
 
   updateTableSettings: (pageNumber, blockId, settings) => {

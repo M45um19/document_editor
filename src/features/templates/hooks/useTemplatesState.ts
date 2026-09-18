@@ -20,14 +20,104 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
       pageNumber: 1,
       layoutRows: [
         {
+          id: "page-row-header",
+          marginTop: 0,
+          marginBottom: 8,
+          paddingTop: 0,
+          paddingBottom: 0,
+          columns: [
+            {
+              id: "col-header-logo",
+              width: 8,
+              blocks: [
+                {
+                  id: "header-logo-1",
+                  type: "image",
+                  caption: "Company Logo",
+                  isLogoPreset: true,
+                  width: 42,
+                  height: 42,
+                  align: "left",
+                  borderRadius: 8,
+                },
+              ],
+            },
+            {
+              id: "col-header-company",
+              width: 52,
+              blocks: [
+                {
+                  id: "header-company-name",
+                  type: "text",
+                  content: "Your Company",
+                  fontFamily: "Inter",
+                  fontSize: 22,
+                  fontWeight: "800",
+                  color: "#0f172a",
+                  align: "left",
+                },
+                {
+                  id: "header-company-tagline",
+                  type: "text",
+                  content: "Better Documents, Better Business",
+                  fontFamily: "Inter",
+                  fontSize: 12,
+                  fontWeight: "500",
+                  color: "#64748b",
+                  align: "left",
+                },
+              ],
+            },
+            {
+              id: "col-header-title",
+              width: 40,
+              blocks: [
+                {
+                  id: "header-doc-title",
+                  type: "text",
+                  content: "VISUAL DOCUMENT",
+                  fontFamily: "Inter",
+                  fontSize: 22,
+                  fontWeight: "900",
+                  color: "#0f172a",
+                  align: "right",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "page-row-divider",
+          marginTop: 0,
+          marginBottom: 14,
+          paddingTop: 0,
+          paddingBottom: 0,
+          columns: [
+            {
+              id: "col-divider-main",
+              width: 100,
+              blocks: [
+                {
+                  id: "header-divider-1",
+                  type: "shape",
+                  shapeType: "divider",
+                  color: "#2563eb",
+                  height: 1.5,
+                },
+              ],
+            },
+          ],
+        },
+        {
           id: "page-row-meta",
           marginTop: 0,
           marginBottom: 16,
-          paddingTop: 6,
-          paddingBottom: 6,
+          paddingTop: 0,
+          paddingBottom: 0,
           columns: [
             {
               id: "col-meta-issuer",
+              width: 33.3,
               blocks: [
                 {
                   id: "meta-block-issuer",
@@ -35,14 +125,15 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
                   content: "ISSUER/\nIssuer Details",
                   fontFamily: "Inter",
                   fontSize: 13,
-                  fontWeight: "600",
-                  color: "#1e293b",
+                  fontWeight: "700",
+                  color: "#0f172a",
                   align: "left",
                 },
               ],
             },
             {
               id: "col-meta-client",
+              width: 33.3,
               blocks: [
                 {
                   id: "meta-block-client",
@@ -50,14 +141,15 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
                   content: "Client Details",
                   fontFamily: "Inter",
                   fontSize: 13,
-                  fontWeight: "600",
-                  color: "#1e293b",
+                  fontWeight: "700",
+                  color: "#0f172a",
                   align: "left",
                 },
               ],
             },
             {
               id: "col-meta-nodate",
+              width: 33.4,
               blocks: [
                 {
                   id: "meta-block-nodate",
@@ -65,8 +157,8 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
                   content: "No/Date:  C-2026-061\n2026-09-14",
                   fontFamily: "Inter",
                   fontSize: 13,
-                  fontWeight: "600",
-                  color: "#1e293b",
+                  fontWeight: "700",
+                  color: "#0f172a",
                   align: "right",
                 },
               ],
@@ -77,11 +169,12 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
           id: "page-row-table",
           marginTop: 0,
           marginBottom: 16,
-          paddingTop: 6,
-          paddingBottom: 6,
+          paddingTop: 0,
+          paddingBottom: 0,
           columns: [
             {
               id: "col-table-main",
+              width: 100,
               blocks: [
                 {
                   id: "initial-table-1",
@@ -106,13 +199,60 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
       ],
       blocks: [
         {
+          id: "header-logo-1",
+          type: "image",
+          caption: "Company Logo",
+          isLogoPreset: true,
+          width: 42,
+          height: 42,
+          align: "left",
+          borderRadius: 8,
+        },
+        {
+          id: "header-company-name",
+          type: "text",
+          content: "Your Company",
+          fontFamily: "Inter",
+          fontSize: 22,
+          fontWeight: "800",
+          color: "#0f172a",
+          align: "left",
+        },
+        {
+          id: "header-company-tagline",
+          type: "text",
+          content: "Better Documents, Better Business",
+          fontFamily: "Inter",
+          fontSize: 12,
+          fontWeight: "500",
+          color: "#64748b",
+          align: "left",
+        },
+        {
+          id: "header-doc-title",
+          type: "text",
+          content: "VISUAL DOCUMENT",
+          fontFamily: "Inter",
+          fontSize: 22,
+          fontWeight: "900",
+          color: "#0f172a",
+          align: "right",
+        },
+        {
+          id: "header-divider-1",
+          type: "shape",
+          shapeType: "divider",
+          color: "#2563eb",
+          height: 1.5,
+        },
+        {
           id: "meta-block-issuer",
           type: "text",
           content: "ISSUER/\nIssuer Details",
           fontFamily: "Inter",
           fontSize: 13,
-          fontWeight: "600",
-          color: "#1e293b",
+          fontWeight: "700",
+          color: "#0f172a",
           align: "left",
         },
         {
@@ -121,8 +261,8 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
           content: "Client Details",
           fontFamily: "Inter",
           fontSize: 13,
-          fontWeight: "600",
-          color: "#1e293b",
+          fontWeight: "700",
+          color: "#0f172a",
           align: "left",
         },
         {
@@ -131,8 +271,8 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
           content: "No/Date:  C-2026-061\n2026-09-14",
           fontFamily: "Inter",
           fontSize: 13,
-          fontWeight: "600",
-          color: "#1e293b",
+          fontWeight: "700",
+          color: "#0f172a",
           align: "right",
         },
         {
@@ -328,7 +468,31 @@ export const useTemplatesState = create<TemplatesStoreState>()(
           try {
             const raw = localStorage.getItem(`doc_template_data_${id}`);
             if (raw) {
-              return JSON.parse(raw);
+              const parsed = JSON.parse(raw);
+              if (parsed && parsed.pages && parsed.pages.length > 0) {
+                const page1 = parsed.pages[0];
+                const rows = page1.layoutRows || [];
+                const hasHeaderRow = rows.some(
+                  (r: any) =>
+                    r.id === "page-row-header" ||
+                    r.columns?.some((c: any) => c.id === "col-header-company")
+                );
+                if (!hasHeaderRow && INITIAL_TEMPLATE_DATA.pages[0].layoutRows) {
+                  const updatedPage1 = {
+                    ...page1,
+                    layoutRows: [
+                      INITIAL_TEMPLATE_DATA.pages[0].layoutRows[0],
+                      INITIAL_TEMPLATE_DATA.pages[0].layoutRows[1],
+                      ...rows,
+                    ],
+                  };
+                  return {
+                    ...parsed,
+                    pages: [updatedPage1, ...parsed.pages.slice(1)],
+                  };
+                }
+              }
+              return parsed;
             }
           } catch (e) {
             console.error("Failed to load template data from localStorage", e);

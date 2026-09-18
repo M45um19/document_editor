@@ -11,6 +11,7 @@ import {
   Type,
   ImageIcon,
   Shapes,
+  Upload,
   X,
 } from "lucide-react";
 import { useMounted } from "@/hooks/useMounted";
@@ -133,7 +134,7 @@ function AutoExpandingTextarea({
   const resize = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.max(22, textareaRef.current.scrollHeight)}px`;
+      textareaRef.current.style.height = `${Math.max(14, textareaRef.current.scrollHeight)}px`;
     }
   };
 
@@ -152,7 +153,10 @@ function AutoExpandingTextarea({
         resize();
       }}
       rows={1}
-      style={style}
+      style={{
+        lineHeight: 1.25,
+        ...style,
+      }}
       className={className}
       placeholder={placeholder}
     />
@@ -180,6 +184,8 @@ export function EditorCanvas() {
   const setSelectedColumnId = useEditorState((s) => s.setSelectedColumnId);
 
   const updateTextBlock = useEditorState((s) => s.updateTextBlock);
+  const updateImageBlock = useEditorState((s) => s.updateImageBlock);
+  const updateShapeBlock = useEditorState((s) => s.updateShapeBlock);
   const updateTableRow = useEditorState((s) => s.updateTableRow);
   const addTableRow = useEditorState((s) => s.addTableRow);
   const deleteTableRow = useEditorState((s) => s.deleteTableRow);
@@ -1057,13 +1063,13 @@ export function EditorCanvas() {
             }}
             className={`transition-all relative group/text cursor-text ${
               isSelected
-                ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/15 rounded-xl p-3 sm:p-3.5 shadow-xs"
-                : "border border-transparent hover:border-slate-200/80 rounded-lg p-0 sm:p-0.5 bg-transparent"
+                ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/15 rounded-xl p-2 sm:p-2.5 shadow-xs"
+                : "border border-transparent hover:border-slate-200/80 rounded p-0 bg-transparent"
             }`}
           >
             {/* Header toolbar only visible when selected */}
             {isSelected ? (
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="flex items-center gap-1.5 text-slate-700 text-xs font-semibold uppercase tracking-wider shrink-0">
                     <Type className="w-3.5 h-3.5 text-blue-600" />
@@ -1107,7 +1113,7 @@ export function EditorCanvas() {
                   removeElement(pageNum, textBlock.id);
                 }}
                 aria-label="Delete text block"
-                className="opacity-0 group-hover/text:opacity-100 absolute top-0 right-0 text-slate-400 hover:text-red-500 p-0.5 rounded bg-white/90 shadow-2xs border border-slate-200 transition cursor-pointer z-10"
+                className="opacity-0 group-hover/text:opacity-100 absolute -top-1 right-0 text-slate-400 hover:text-red-500 p-0.5 rounded bg-white/90 shadow-2xs border border-slate-200 transition cursor-pointer z-10"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -1122,9 +1128,9 @@ export function EditorCanvas() {
               }}
               onChange={(e) => updateTextBlock(pageNum, textBlock.id, e.target.value)}
               style={textStyle}
-              className={`w-full bg-transparent outline-none resize-none leading-relaxed transition-all ${
+              className={`w-full bg-transparent outline-none resize-none leading-snug transition-all ${
                 isSelected
-                  ? "border border-blue-200 focus:border-blue-400 focus:bg-white rounded-md p-1.5"
+                  ? "border border-blue-200 focus:border-blue-400 focus:bg-white rounded-md p-1"
                   : "border-0 p-0 hover:border-0 rounded"
               }`}
               placeholder={isSelected ? "Type your notes or document description..." : "Enter text..."}
@@ -1135,29 +1141,146 @@ export function EditorCanvas() {
 
       case "image": {
         const imageBlock = block as ImageBlock;
+        const isSelected = selectedBlockId === imageBlock.id;
+        const widthVal = imageBlock.width ?? (imageBlock.isLogoPreset ? 42 : "100%");
+        const heightVal = imageBlock.height ?? (imageBlock.isLogoPreset ? 42 : "auto");
+        const alignVal = imageBlock.align || "left";
+        const borderRadiusVal =
+          imageBlock.borderRadius !== undefined ? `${imageBlock.borderRadius}px` : "8px";
+
+        const alignClass =
+          alignVal === "center"
+            ? "flex justify-center items-center"
+            : alignVal === "right"
+            ? "flex justify-end items-center"
+            : "flex justify-start items-center";
+
+        const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === "string") {
+                updateImageBlock(pageNum, imageBlock.id, {
+                  url: reader.result,
+                  isLogoPreset: false,
+                });
+              }
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
         return (
           <div
             key={imageBlock.id}
-            className="border border-slate-200/80 rounded-xl p-4 bg-white relative group shadow-2xs space-y-3"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBlockId(imageBlock.id);
+            }}
+            className={`transition-all relative group/img cursor-pointer ${
+              isSelected
+                ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/15 rounded-xl p-2 shadow-xs"
+                : "border border-transparent hover:border-slate-200/80 rounded p-0 bg-transparent"
+            }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Image / Illustration</span>
+            {/* Header toolbar when selected */}
+            {isSelected ? (
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5 text-slate-700 text-xs font-semibold uppercase tracking-wider shrink-0">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{imageBlock.isLogoPreset ? "Logo Block" : "Image Asset"}</span>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <label className="flex items-center gap-1 text-[10px] font-semibold text-slate-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded px-2 py-0.5 transition cursor-pointer shadow-2xs">
+                    <Upload className="w-3 h-3" />
+                    <span>Upload</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeElement(pageNum, imageBlock.id);
+                    }}
+                    aria-label="Delete image block"
+                    className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
+            ) : (
+              /* Unselected hover delete button */
               <button
                 type="button"
-                onClick={() => removeElement(pageNum, imageBlock.id)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer opacity-0 group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeElement(pageNum, imageBlock.id);
+                }}
+                aria-label="Delete image block"
+                className="opacity-0 group-hover/img:opacity-100 absolute -top-1 right-0 text-slate-400 hover:text-red-500 p-0.5 rounded bg-white/90 shadow-2xs border border-slate-200 transition cursor-pointer z-10"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
-            </div>
-            <div className="w-full h-32 sm:h-40 rounded-lg bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50/40 border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 gap-2">
-              <ImageIcon className="w-8 h-8 text-slate-300" />
-              <span className="text-xs font-medium text-slate-500">
-                {imageBlock.caption || "Image Asset Placeholder"}
-              </span>
+            )}
+
+            {/* Image Content Container */}
+            <div className={`w-full ${alignClass}`}>
+              {imageBlock.url ? (
+                <img
+                  src={imageBlock.url}
+                  alt={imageBlock.caption || "Document Image"}
+                  style={{
+                    width: typeof widthVal === "number" ? `${widthVal}px` : widthVal,
+                    height: typeof heightVal === "number" ? `${heightVal}px` : heightVal,
+                    borderRadius: borderRadiusVal,
+                    objectFit: "contain",
+                  }}
+                  className="max-w-full transition-all shadow-2xs"
+                />
+              ) : imageBlock.isLogoPreset ? (
+                /* Precise geometric 4-tile blue logo icon matching the design */
+                <svg
+                  width={typeof widthVal === "number" ? widthVal : 42}
+                  height={typeof heightVal === "number" ? heightVal : 42}
+                  viewBox="0 0 42 42"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{
+                    width: typeof widthVal === "number" ? `${widthVal}px` : widthVal,
+                    height: typeof heightVal === "number" ? `${heightVal}px` : heightVal,
+                    borderRadius: borderRadiusVal,
+                  }}
+                  className="shrink-0 drop-shadow-2xs select-none"
+                >
+                  <rect x="1" y="1" width="18" height="18" rx="4.5" fill="#60A5FA" fillOpacity="0.8" />
+                  <rect x="21" y="1" width="18" height="18" rx="4.5" fill="#1D4ED8" />
+                  <rect x="26" y="6" width="8" height="8" rx="2" fill="#FFFFFF" />
+                  <rect x="1" y="21" width="18" height="18" rx="4.5" fill="#2563EB" />
+                  <rect x="21" y="21" width="18" height="18" rx="4.5" fill="#93C5FD" />
+                </svg>
+              ) : (
+                /* Default Image placeholder */
+                <label className="w-full h-28 sm:h-36 rounded-lg bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50/40 border border-dashed border-slate-300 hover:border-blue-400 flex flex-col items-center justify-center text-slate-400 gap-1.5 cursor-pointer transition">
+                  <ImageIcon className="w-7 h-7 text-slate-300" />
+                  <span className="text-xs font-medium text-slate-500">
+                    {imageBlock.caption || "Click to Upload Image"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
           </div>
         );
@@ -1165,25 +1288,64 @@ export function EditorCanvas() {
 
       case "shape": {
         const shapeBlock = block as ShapeBlock;
+        const isSelected = selectedBlockId === shapeBlock.id;
+        const dividerColor = shapeBlock.color || "#3b82f6";
+        const dividerHeight = shapeBlock.height ? `${shapeBlock.height}px` : "1.5px";
+        const dividerWidth = shapeBlock.width || "100%";
+
         return (
           <div
             key={shapeBlock.id}
-            className="border border-slate-200/80 rounded-xl p-3 bg-white relative group shadow-2xs space-y-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBlockId(shapeBlock.id);
+            }}
+            className={`transition-all relative group/shape cursor-pointer ${
+              isSelected
+                ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/15 rounded-lg p-2 shadow-xs"
+                : "border-0 p-0 bg-transparent"
+            }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                <Shapes className="w-3.5 h-3.5 text-amber-500" />
-                <span>Decorative Divider</span>
+            {isSelected && (
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5 text-slate-700 text-xs font-semibold uppercase tracking-wider">
+                  <Shapes className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Decorative Divider</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeElement(pageNum, shapeBlock.id);
+                  }}
+                  aria-label="Delete shape block"
+                  className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
+            )}
+            {!isSelected && (
               <button
                 type="button"
-                onClick={() => removeElement(pageNum, shapeBlock.id)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded transition cursor-pointer opacity-0 group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeElement(pageNum, shapeBlock.id);
+                }}
+                aria-label="Delete shape block"
+                className="opacity-0 group-hover/shape:opacity-100 absolute -top-3 right-0 text-slate-400 hover:text-red-500 p-0.5 rounded bg-white/90 shadow-2xs border border-slate-200 transition cursor-pointer z-10"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
-            </div>
-            <div className="w-full h-2.5 rounded-full bg-gradient-to-r from-blue-600 via-sky-400 to-indigo-500 shadow-xs" />
+            )}
+            <div
+              style={{
+                height: dividerHeight,
+                background: `linear-gradient(90deg, #60A5FA 0%, ${dividerColor} 20%, ${dividerColor} 100%)`,
+                width: dividerWidth,
+              }}
+              className="rounded-full shadow-2xs"
+            />
           </div>
         );
       }
@@ -1264,62 +1426,19 @@ export function EditorCanvas() {
         className="w-full max-w-[794px] min-h-[1123px] mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all space-y-6 relative"
       >
         <div className="space-y-6 sm:space-y-8">
-          {/* Page 1 Header (Company branding & title) */}
-          {currentPage.pageNumber === 1 ? (
-            <div className="space-y-3 sm:space-y-4">
-              {/* Document Header */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-0">
-                {/* Company Info */}
-                <div className="flex items-start gap-3 sm:gap-3.5">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-600 flex items-center justify-center relative overflow-hidden shadow-xs shrink-0">
-                    <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 bg-white/25 rounded absolute -top-1 -right-1" />
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 bg-white rounded-sm" />
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={metadata.companyName}
-                      onChange={(e) => setMetadata({ companyName: e.target.value })}
-                      className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 tracking-tight leading-none bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 w-full"
-                    />
-                    <input
-                      type="text"
-                      value={metadata.companyTagline}
-                      onChange={(e) => setMetadata({ companyTagline: e.target.value })}
-                      className="text-xs sm:text-sm text-slate-400 font-normal mt-1 sm:mt-1.5 bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 w-full"
-                    />
-                  </div>
-                </div>
-
-                {/* Document Title */}
-                <div>
-                  <input
-                    type="text"
-                    value={metadata.documentTitle}
-                    onChange={(e) => setMetadata({ documentTitle: e.target.value })}
-                    className="text-lg sm:text-xl md:text-2xl font-black tracking-wide text-slate-900 uppercase bg-transparent outline-none border-b border-transparent hover:border-slate-200 focus:border-blue-500 sm:text-right"
-                  />
-                </div>
-              </div>
-
-              {/* Accent Divider Line */}
-              <div className="relative border-b border-slate-200/90 pb-2 mb-2">
-                <div className="absolute -bottom-[1px] left-0 w-16 sm:w-20 h-[2px] bg-blue-500 rounded-full" />
-              </div>
-            </div>
-          ) : (
-            /* Subsequent Page Compact Header */
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+          {/* Subsequent Page Compact Header */}
+          {currentPage.pageNumber > 1 && (
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-2">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">
                   {currentPage.pageNumber}
                 </div>
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  {metadata.companyName} — Continuation Sheet
+                  {metadata.companyName || "Document"} — Continuation Sheet
                 </span>
               </div>
               <span className="text-xs font-medium text-slate-400">
-                Ref: {metadata.documentNumber}
+                Ref: {metadata.documentNumber || "Page " + currentPage.pageNumber}
               </span>
             </div>
           )}
@@ -1362,7 +1481,7 @@ export function EditorCanvas() {
                         setSelectedColumnId(row.columns[0].id);
                       }
                     }}
-                    className={`transition-[margin] duration-75 rounded-xl relative group/gridrow py-1 ${
+                    className={`transition-[margin] duration-75 rounded-lg relative group/gridrow py-0 ${
                       isRowSelected
                         ? "border border-blue-300/80 bg-blue-50/15 ring-1 ring-blue-400/20"
                         : "border border-transparent hover:border-slate-200/60 bg-transparent"
@@ -1400,29 +1519,29 @@ export function EditorCanvas() {
                       </div>
                     )}
 
-                    {/* Row Header Helper Label (Visible when row is selected or on hover) */}
+                    {/* Row Header Helper Toolbar (Floating overlay above the row, occupying 0px height in document flow) */}
                     <div
-                      className={`items-center justify-between mb-1.5 px-1 transition-opacity duration-150 ${
+                      className={`absolute -top-7 left-0 right-0 z-20 items-center justify-between px-1 transition-opacity duration-150 ${
                         isRowSelected
-                          ? "flex opacity-100"
+                          ? "flex opacity-100 pointer-events-auto"
                           : "flex opacity-0 group-hover/gridrow:opacity-100 pointer-events-none group-hover/gridrow:pointer-events-auto"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Row {rowIdx + 1} ({colCount} Column{colCount > 1 ? "s" : ""})
+                      <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-xs px-2 py-0.5 rounded-md border border-slate-200/90 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          Row {rowIdx + 1} ({colCount} Col{colCount > 1 ? "s" : ""})
                         </span>
                         {isRowSelected && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.5 rounded">
-                            Active Grid Row
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-100/80 px-1.5 py-0.2 rounded">
+                            Active
                           </span>
                         )}
-                        <span className="text-[9px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                          Margin: {effectiveMarginTop}px Top / {effectiveMarginBottom}px Bottom
+                        <span className="text-[9px] font-medium text-slate-400">
+                          ↕ {effectiveMarginTop}px / {effectiveMarginBottom}px
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 bg-white/95 backdrop-blur-xs p-0.5 rounded-md border border-slate-200/90 shadow-2xs">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1430,10 +1549,10 @@ export function EditorCanvas() {
                             setSelectedRowId(row.id);
                             addPageColumn(currentPage.pageNumber, row.id);
                           }}
-                          className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 bg-white hover:bg-blue-50 border border-slate-200 rounded px-2 py-0.5 transition cursor-pointer shadow-2xs"
+                          className="flex items-center gap-1 text-[10px] font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded px-1.5 py-0.5 transition cursor-pointer"
                         >
                           <Plus className="w-3 h-3" />
-                          <span>Add Column</span>
+                          <span>Add Col</span>
                         </button>
                         {colCount > 1 && (
                           <button
@@ -1442,9 +1561,9 @@ export function EditorCanvas() {
                               e.stopPropagation();
                               deletePageColumn(currentPage.pageNumber, row.id);
                             }}
-                            className="text-[11px] font-medium text-slate-400 hover:text-red-600 px-1.5 py-0.5 transition cursor-pointer"
+                            className="text-[10px] font-medium text-slate-400 hover:text-red-600 px-1 py-0.5 transition cursor-pointer"
                           >
-                            Delete Col
+                            Del Col
                           </button>
                         )}
                         {getPageLayoutRows(currentPage).length > 1 && (
@@ -1455,7 +1574,7 @@ export function EditorCanvas() {
                               deletePageRow(currentPage.pageNumber, row.id);
                             }}
                             aria-label="Delete grid row"
-                            className="text-slate-400 hover:text-red-600 p-1 rounded transition cursor-pointer"
+                            className="text-slate-400 hover:text-red-600 p-0.5 rounded transition cursor-pointer"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -1488,7 +1607,7 @@ export function EditorCanvas() {
                               setSelectedRowId(row.id);
                               setSelectedColumnId(col.id);
                             }}
-                            className={`flex flex-col gap-2 min-w-0 relative shrink-0 px-1 sm:px-1.5 transition-[width] duration-75 ${
+                            className={`flex flex-col gap-0.5 min-w-0 relative shrink-0 px-1 sm:px-1.5 transition-[width] duration-75 ${
                               isColSelected && isRowSelected
                                 ? "ring-1 ring-blue-400/40 bg-blue-50/10 rounded-lg"
                                 : ""

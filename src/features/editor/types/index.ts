@@ -79,7 +79,12 @@ export interface ImageBlock {
   id: string;
   type: "image";
   url?: string;
-  caption: string;
+  caption?: string;
+  width?: number | string;
+  height?: number | string;
+  align?: "left" | "center" | "right";
+  borderRadius?: number;
+  isLogoPreset?: boolean;
 }
 
 export interface ShapeBlock {
@@ -87,9 +92,17 @@ export interface ShapeBlock {
   type: "shape";
   shapeType: "divider" | "banner" | "badge";
   color?: string;
+  height?: number | string;
+  width?: number | string;
 }
 
 export type CanvasBlock = TableBlock | TextBlock | ImageBlock | ShapeBlock;
+
+export type BlockUpdatePayload = Partial<BlockTypographyStyle & TableStyleSettings> &
+  Partial<Omit<ImageBlock, "type" | "id">> &
+  Partial<Omit<ShapeBlock, "type" | "id">> & {
+    [key: string]: any;
+  };
 
 export interface TextStyleSettings {
   fontFamily: string;
