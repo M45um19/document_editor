@@ -147,9 +147,76 @@ export interface CanvasPage {
 export type ToolType = "select" | "text" | "table" | "image" | "shape";
 export type ActiveToolType = ToolType;
 
+export type PaperSize = "a4" | "letter" | "legal" | "tabloid";
+
+export interface PaperSizeConfig {
+  id: PaperSize;
+  name: string;
+  label: string;
+  shortLabel: string;
+  dimensionsMm: string;
+  dimensionsIn: string;
+  widthPx: number;
+  minHeightPx: number;
+  page1Capacity: number;
+  pageNCapacity: number;
+}
+
+export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
+  a4: {
+    id: "a4",
+    name: "A4",
+    label: "A4 (210 × 297 mm)",
+    shortLabel: "A4 • 210 × 297 mm",
+    dimensionsMm: "210 × 297 mm",
+    dimensionsIn: "8.27 × 11.69 in",
+    widthPx: 794,
+    minHeightPx: 1123,
+    page1Capacity: 16.0,
+    pageNCapacity: 19.0,
+  },
+  letter: {
+    id: "letter",
+    name: "Letter (US)",
+    label: "Letter (8.5 × 11 in)",
+    shortLabel: "Letter • 8.5 × 11 in",
+    dimensionsMm: "216 × 279 mm",
+    dimensionsIn: "8.5 × 11 in",
+    widthPx: 816,
+    minHeightPx: 1056,
+    page1Capacity: 13.5,
+    pageNCapacity: 16.0,
+  },
+  legal: {
+    id: "legal",
+    name: "Legal (US)",
+    label: "Legal (8.5 × 14 in)",
+    shortLabel: "Legal • 8.5 × 14 in",
+    dimensionsMm: "216 × 356 mm",
+    dimensionsIn: "8.5 × 14 in",
+    widthPx: 816,
+    minHeightPx: 1344,
+    page1Capacity: 21.0,
+    pageNCapacity: 25.0,
+  },
+  tabloid: {
+    id: "tabloid",
+    name: "Tabloid / Ledger",
+    label: "Tabloid (11 × 17 in)",
+    shortLabel: "Tabloid • 11 × 17 in",
+    dimensionsMm: "279 × 432 mm",
+    dimensionsIn: "11 × 17 in",
+    widthPx: 1056,
+    minHeightPx: 1632,
+    page1Capacity: 25.0,
+    pageNCapacity: 30.0,
+  },
+};
+
 export interface DocumentStateSnapshot {
   metadata: DocumentMetadata;
   pages: CanvasPage[];
+  paperSize?: PaperSize;
 }
 
 export const FONT_FAMILY_MAP: Record<string, string> = {

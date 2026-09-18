@@ -15,6 +15,7 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
     documentNumber: "C-2026-061",
     documentDate: "2026-09-14",
   },
+  paperSize: "tabloid",
   pages: [
     {
       pageNumber: 1,
@@ -345,6 +346,7 @@ export const useTemplatesState = create<TemplatesStoreState>()(
             documentTitle: `VISUAL DOCUMENT ${nextCounter}`,
             documentNumber: `C-2026-06${nextCounter}`,
           },
+          paperSize: "tabloid",
           pages: JSON.parse(JSON.stringify(INITIAL_TEMPLATE_DATA.pages)),
         };
 

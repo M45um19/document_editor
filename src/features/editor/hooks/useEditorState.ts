@@ -19,6 +19,8 @@ import {
   ShapeBlock,
   TableStyleSettings,
   BlockUpdatePayload,
+  PaperSize,
+  PAPER_SIZES,
 } from "../types";
 
 export interface EditorStoreState {
@@ -28,6 +30,7 @@ export interface EditorStoreState {
   selectedRowId: string | null;
   selectedColumnId: string | null;
   metadata: DocumentMetadata;
+  paperSize: PaperSize;
   pages: CanvasPage[];
   activePage: number;
   activeTool: ToolType;
@@ -49,6 +52,7 @@ export interface EditorStoreState {
   setSelectedColumnId: (columnId: string | null) => void;
   setActiveTool: (tool: ToolType) => void;
   setZoomLevel: (zoom: string) => void;
+  setPaperSize: (paperSize: PaperSize) => void;
   toggleFullscreen: () => void;
   setActivePage: (pageNumber: number) => void;
   addPage: () => void;
@@ -376,12 +380,16 @@ export const getPageLayoutRows = (page: CanvasPage): PageGridRow[] => {
   ];
 };
 
-// A4 Page Capacity Constants (in height units ~50px)
-export const PAGE_1_CAPACITY = 16.0; // Usable content space on Page 1
-export const PAGE_N_CAPACITY = 19.0; // Usable content space on Continuation Pages
-
-export const getPageCapacity = (pageNumber: number): number => {
-  return pageNumber === 1 ? PAGE_1_CAPACITY : PAGE_N_CAPACITY;
+// Dynamic Page Capacity based on Paper Size
+export const getPageCapacity = (pageNumber: number, paperSize?: PaperSize): number => {
+  const currentPaper =
+    paperSize ||
+    (typeof useEditorState !== "undefined" && useEditorState.getState
+      ? useEditorState.getState().paperSize
+      : "tabloid") ||
+    "tabloid";
+  const config = PAPER_SIZES[currentPaper] || PAPER_SIZES.tabloid;
+  return pageNumber === 1 ? config.page1Capacity : config.pageNCapacity;
 };
 
 // Estimated height weight per block type
@@ -471,7 +479,7 @@ const mergeSplitTablesInRows = (rows: PageGridRow[]): PageGridRow[] => {
 };
 
 // Dynamic Bi-Directional Auto-Pagination & Reflow Engine (with Table Splitting)
-export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
+export const reflowPages = (pages: CanvasPage[], paperSize?: PaperSize): CanvasPage[] => {
   if (!pages || pages.length === 0) {
     return [
       {
@@ -481,6 +489,13 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
       },
     ];
   }
+
+  const effectivePaperSize =
+    paperSize ||
+    (typeof useEditorState !== "undefined" && useEditorState.getState
+      ? useEditorState.getState().paperSize
+      : "tabloid") ||
+    "tabloid";
 
   // 1. Collect all layout rows in continuous sequence across all pages
   const allRows: PageGridRow[] = [];
@@ -493,10 +508,10 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
   const unifiedRows = mergeSplitTablesInRows(allRows);
   const rowsToProcess = unifiedRows.length > 0 ? unifiedRows : INITIAL_PAGE_ROWS;
 
-  // 3. Pack rows into A4 pages sequentially according to page budget
+  // 3. Pack rows into pages sequentially according to paper budget
   const reflowedPages: CanvasPage[] = [];
   let currentPageNum = 1;
-  let currentCapacity = getPageCapacity(currentPageNum);
+  let currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
   let currentPageRows: PageGridRow[] = [];
   let currentWeight = 0;
 
@@ -526,7 +541,7 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
           });
 
           currentPageNum++;
-          currentCapacity = getPageCapacity(currentPageNum);
+          currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
           currentPageRows = [];
           currentWeight = 0;
           continue;
@@ -579,7 +594,7 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
 
           // Advance to next continuation page
           currentPageNum++;
-          currentCapacity = getPageCapacity(currentPageNum);
+          currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
           currentPageRows = [];
           currentWeight = 0;
 
@@ -607,7 +622,7 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
         });
 
         currentPageNum++;
-        currentCapacity = getPageCapacity(currentPageNum);
+        currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
         currentPageRows = [row];
         currentWeight = rowWeight;
       } else {
@@ -641,10 +656,25 @@ export const reflowPages = (pages: CanvasPage[]): CanvasPage[] => {
   }));
 };
 
-const autoSaveToStorage = (templateId: string, metadata: DocumentMetadata, pages: CanvasPage[]) => {
+const autoSaveToStorage = (
+  templateId: string,
+  metadata: DocumentMetadata,
+  pages: CanvasPage[],
+  paperSize?: PaperSize
+) => {
   if (typeof window !== "undefined" && templateId) {
     try {
-      const snapshot: DocumentStateSnapshot = { metadata, pages };
+      const effectivePaperSize =
+        paperSize ||
+        (typeof useEditorState !== "undefined" && useEditorState.getState
+          ? useEditorState.getState().paperSize
+          : "tabloid") ||
+        "tabloid";
+      const snapshot: DocumentStateSnapshot = {
+        metadata,
+        pages,
+        paperSize: effectivePaperSize,
+      };
       localStorage.setItem(`doc_template_data_${templateId}`, JSON.stringify(snapshot));
     } catch (e) {
       console.error("Failed to auto-save to localStorage", e);
@@ -659,6 +689,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   selectedRowId: "page-row-header",
   selectedColumnId: "col-header-company",
   metadata: INITIAL_METADATA,
+  paperSize: "tabloid",
   pages: [
     {
       pageNumber: 1,
@@ -710,6 +741,17 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   },
 
   setZoomLevel: (zoomLevel) => set({ zoomLevel }),
+  setPaperSize: (paperSize: PaperSize) => {
+    set((state) => {
+      const reflowed = reflowPages(state.pages, paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, paperSize);
+      return {
+        paperSize,
+        pages: reflowed,
+        activePage: Math.min(state.activePage, reflowed.length),
+      };
+    });
+  },
   toggleFullscreen: () => set((s) => ({ isFullscreen: !s.isFullscreen })),
   setActivePage: (pageNumber) => set({ activePage: pageNumber }),
 
@@ -996,6 +1038,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
     const activeId = get().activeTemplateId;
     const snapshot: DocumentStateSnapshot = {
       metadata: get().metadata,
+      paperSize: get().paperSize,
       pages: get().pages,
     };
 
@@ -1019,6 +1062,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   loadTemplate: (snapshot, templateId) => {
     if (!snapshot || !snapshot.pages || snapshot.pages.length === 0) return;
+    const targetPaperSize = snapshot.paperSize || "tabloid";
     let pagesToLoad = snapshot.pages;
     const page1 = pagesToLoad[0];
     const rows = getPageLayoutRows(page1);
@@ -1034,10 +1078,11 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       pagesToLoad = [updatedPage1, ...pagesToLoad.slice(1)];
     }
 
-    const reflowed = reflowPages(pagesToLoad);
+    const reflowed = reflowPages(pagesToLoad, targetPaperSize);
     set((state) => ({
       activeTemplateId: templateId || state.activeTemplateId,
       metadata: snapshot.metadata || INITIAL_METADATA,
+      paperSize: targetPaperSize,
       pages: reflowed,
       activePage: 1,
       selectedBlockId: null,
@@ -1060,9 +1105,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: INITIAL_BLOCKS,
         },
       ];
-      autoSaveToStorage(state.activeTemplateId, INITIAL_METADATA, defaultPages);
+      autoSaveToStorage(state.activeTemplateId, INITIAL_METADATA, defaultPages, "tabloid");
       return {
         metadata: INITIAL_METADATA,
+        paperSize: "tabloid",
         pages: defaultPages,
         activePage: 1,
         selectedBlockId: null,
