@@ -1,15 +1,78 @@
 "use client";
 
-import React from "react";
-import { FileText, Undo2, Redo2, Eye, Save, Download, PanelLeft, SlidersHorizontal } from "lucide-react";
+import React, { useState } from "react";
+import {
+  FileText,
+  Undo2,
+  Redo2,
+  Eye,
+  Save,
+  Download,
+  PanelLeft,
+  SlidersHorizontal,
+  Check,
+  Loader2,
+} from "lucide-react";
+import { useNavbar } from "@/hooks/useNavbar";
+import { useEditorState } from "@/features/editor/hooks/useEditorState";
+import { exportDocumentToPdf } from "@/features/export/services/pdfExportService";
 
 interface HeaderProps {
   onToggleToolbox?: () => void;
   onToggleProperties?: () => void;
   onSave?: () => void;
+  onPreview?: () => void;
 }
 
-export function Header({ onToggleToolbox, onToggleProperties, onSave }: HeaderProps) {
+export function Header({
+  onToggleToolbox,
+  onToggleProperties,
+  onSave,
+  onPreview,
+}: HeaderProps) {
+  const openPreview = useNavbar((s) => s.openPreview);
+  const metadata = useEditorState((s) => s.metadata);
+  const setMetadata = useEditorState((s) => s.setMetadata);
+  const pages = useEditorState((s) => s.pages);
+  const paperSize = useEditorState((s) => s.paperSize);
+
+  const [isSaved, setIsSaved] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleSave = () => {
+    if (onSave) {
+      onSave();
+    }
+    setIsSaved(true);
+    setTimeout(() => {
+      setIsSaved(false);
+    }, 2500);
+  };
+
+  const handlePreview = () => {
+    if (onPreview) {
+      onPreview();
+    } else {
+      openPreview();
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsExporting(true);
+    try {
+      await exportDocumentToPdf({
+        fileName: metadata.documentTitle || "Document_Project",
+        paperSize,
+        pages,
+        metadata,
+      });
+    } catch (err) {
+      console.error("Export error", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <header className="w-full h-14 sm:h-16 lg:h-16 2xl:h-20 bg-white border-b border-slate-200 px-2.5 sm:px-5 lg:px-7 2xl:px-10 flex items-center justify-between z-20 shrink-0 select-none transition-all duration-200">
       {/* Left Section: Mobile Toolbox Toggle, Logo, App Title, Project Name, Undo/Redo */}
@@ -41,8 +104,10 @@ export function Header({ onToggleToolbox, onToggleProperties, onSave }: HeaderPr
           </span>
           <input
             type="text"
-            defaultValue="Document Project V1"
+            value={metadata.documentTitle || "Document Project V1"}
+            onChange={(e) => setMetadata({ documentTitle: e.target.value })}
             className="text-xs 2xl:text-sm font-semibold text-slate-800 bg-transparent outline-none focus:text-blue-600 truncate leading-none"
+            placeholder="Project Name"
           />
         </div>
 
@@ -87,8 +152,9 @@ export function Header({ onToggleToolbox, onToggleProperties, onSave }: HeaderPr
         {/* Preview Button */}
         <button
           type="button"
+          onClick={handlePreview}
           aria-label="Preview Document"
-          className="hidden sm:flex items-center gap-1.5 2xl:gap-2 h-8.5 sm:h-9.5 2xl:h-11 px-3 sm:px-3.5 2xl:px-4.5 rounded-lg border border-slate-200 bg-white text-xs 2xl:text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs cursor-pointer"
+          className="hidden sm:flex items-center gap-1.5 2xl:gap-2 h-8.5 sm:h-9.5 2xl:h-11 px-3 sm:px-3.5 2xl:px-4.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-xs 2xl:text-sm font-semibold text-slate-700 active:bg-slate-100 transition shadow-2xs cursor-pointer"
         >
           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-slate-500" />
           <span className="hidden md:inline">Preview</span>
@@ -97,22 +163,36 @@ export function Header({ onToggleToolbox, onToggleProperties, onSave }: HeaderPr
         {/* Save Button */}
         <button
           type="button"
-          onClick={onSave}
+          onClick={handleSave}
           aria-label="Save Document"
-          className="h-8.5 sm:h-9.5 2xl:h-11 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 2xl:px-4.5 rounded-lg border border-blue-200 bg-blue-50/60 text-xs 2xl:text-sm font-semibold text-blue-600 hover:bg-blue-100/70 hover:border-blue-300 transition shadow-2xs cursor-pointer"
+          className={`h-8.5 sm:h-9.5 2xl:h-11 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 2xl:px-4.5 rounded-lg border text-xs 2xl:text-sm font-semibold transition shadow-2xs cursor-pointer ${
+            isSaved
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-500/20 shadow-emerald-500/10"
+              : "border-blue-200 bg-blue-50/60 text-blue-600 hover:bg-blue-100/70 hover:border-blue-300"
+          }`}
         >
-          <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-blue-600" />
-          <span className="hidden md:inline">Save</span>
+          {isSaved ? (
+            <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-emerald-600 stroke-[2.5]" />
+          ) : (
+            <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-blue-600" />
+          )}
+          <span className="hidden md:inline">{isSaved ? "Saved!" : "Save"}</span>
         </button>
 
         {/* Download PDF Button */}
         <button
           type="button"
+          disabled={isExporting}
+          onClick={handleDownloadPdf}
           aria-label="Download PDF"
-          className="h-8.5 sm:h-9.5 2xl:h-11 flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 2xl:px-5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-xs 2xl:text-sm font-semibold text-white transition shadow-sm shadow-blue-600/20 cursor-pointer"
+          className="h-8.5 sm:h-9.5 2xl:h-11 flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 2xl:px-5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-xs 2xl:text-sm font-semibold text-white transition shadow-sm shadow-blue-600/20 cursor-pointer disabled:opacity-60"
         >
-          <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-white" />
-          <span className="hidden md:inline">Download PDF</span>
+          {isExporting ? (
+            <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-white animate-spin" />
+          ) : (
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 2xl:w-4.5 2xl:h-4.5 text-white" />
+          )}
+          <span className="hidden md:inline">{isExporting ? "Exporting..." : "Download PDF"}</span>
         </button>
       </div>
     </header>

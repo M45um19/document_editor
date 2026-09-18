@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { arrayMove } from "@dnd-kit/sortable";
 import {
   TableRowItem,
   CanvasBlock,
@@ -136,6 +137,12 @@ export interface EditorStoreState {
   ) => void;
   addTableRow: (pageNumber: number, blockId: string) => void;
   deleteTableRow: (pageNumber: number, blockId: string, rowId?: number) => void;
+  reorderTableRows: (
+    pageNumber: number,
+    blockId: string,
+    sourceIndex: number,
+    destinationIndex: number
+  ) => void;
   addTableColumn: (pageNumber: number, blockId: string) => void;
   deleteTableColumn: (pageNumber: number, blockId: string, columnId?: string) => void;
   updateTableTitle: (pageNumber: number, blockId: string, title: string) => void;
@@ -397,15 +404,15 @@ export const getBlockWeight = (block: CanvasBlock): number => {
   switch (block.type) {
     case "table": {
       const rowCount = block.rows ? block.rows.length : 0;
-      return 2.0 + rowCount * 0.9;
+      return 1.5 + rowCount * 0.7;
     }
     case "text": {
       const content = block.content || "";
       const explicitLines = content.split("\n").length;
-      const wrappedLines = Math.floor(content.length / 55);
+      const wrappedLines = Math.floor(content.length / 65);
       const totalLines = Math.max(1, explicitLines + wrappedLines);
       const fontSizeMultiplier = (block.fontSize || 14) / 14;
-      return Math.max(0.6, 0.4 + totalLines * 0.4 * fontSizeMultiplier);
+      return Math.max(0.4, 0.2 + totalLines * 0.3 * fontSizeMultiplier);
     }
     case "image": {
       const isLogo = (block as ImageBlock).isLogoPreset || ((block as ImageBlock).width && Number((block as ImageBlock).width) <= 80);
@@ -429,7 +436,7 @@ export const getRowWeight = (row: PageGridRow): number => {
 };
 
 // Helper: Match table blocks by base ID across split continuation fragments
-const isMatchingTableBlock = (b: CanvasBlock, targetId: string): boolean => {
+export const isMatchingTableBlock = (b: CanvasBlock, targetId: string): boolean => {
   if (b.type !== "table") return false;
   if (b.id === targetId) return true;
   const targetBase = targetId.replace(/-split-\d+$/, "");
@@ -531,9 +538,9 @@ export const reflowPages = (pages: CanvasPage[], paperSize?: PaperSize): CanvasP
       while (table.rows.length > 0) {
         const remainingCapacity = currentCapacity - currentWeight;
 
-        // If not enough room on this page even for header + 1 table row (approx 2.9 units),
+        // If not enough room on this page even for header + 1 table row (approx 2.2 units),
         // and current page already has content, advance to next page
-        if (remainingCapacity < 2.9 && currentPageRows.length > 0) {
+        if (remainingCapacity < 2.2 && currentPageRows.length > 0) {
           reflowedPages.push({
             pageNumber: currentPageNum,
             layoutRows: currentPageRows,
@@ -548,12 +555,12 @@ export const reflowPages = (pages: CanvasPage[], paperSize?: PaperSize): CanvasP
         }
 
         // Available space for table rows on this page
-        const spaceForRows = Math.max(0.9, currentCapacity - currentWeight - 2.0);
-        const maxRowsThatFit = Math.max(1, Math.floor(spaceForRows / 0.9));
+        const spaceForRows = Math.max(0.7, currentCapacity - currentWeight - 1.5);
+        const maxRowsThatFit = Math.max(1, Math.floor(spaceForRows / 0.7));
 
         if (table.rows.length <= maxRowsThatFit) {
           // Entire table (or remaining portion) fits on current page!
-          const finalTableWeight = 2.0 + table.rows.length * 0.9;
+          const finalTableWeight = 1.5 + table.rows.length * 0.7;
           const placedRow: PageGridRow = {
             id: row.id,
             columns: [{ id: row.columns[0].id, blocks: [table] }],
@@ -1629,6 +1636,46 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       const reflowed = reflowPages(updatedPages);
       autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
       return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+    });
+  },
+
+  reorderTableRows: (pageNumber, blockId, sourceIndex, destinationIndex) => {
+    set((state) => {
+      if (sourceIndex === destinationIndex) return state;
+
+      const updatedPages = state.pages.map((p) => {
+        const currentRows = getPageLayoutRows(p);
+        const updatedRows = currentRows.map((r) => ({
+          ...r,
+          columns: r.columns.map((c) => ({
+            ...c,
+            blocks: c.blocks.map((b) => {
+              if (b.type === "table" && (b.id === blockId || isMatchingTableBlock(b, blockId))) {
+                if (
+                  sourceIndex < 0 ||
+                  sourceIndex >= b.rows.length ||
+                  destinationIndex < 0 ||
+                  destinationIndex >= b.rows.length
+                ) {
+                  return b;
+                }
+                const newRows = arrayMove(b.rows, sourceIndex, destinationIndex);
+                return { ...b, rows: newRows };
+              }
+              return b;
+            }),
+          })),
+        }));
+        return {
+          ...p,
+          layoutRows: updatedRows,
+          blocks: extractAllBlocksFromRows(updatedRows),
+        };
+      });
+
+      const reflowed = reflowPages(updatedPages);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      return { pages: reflowed };
     });
   },
 
