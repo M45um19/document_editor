@@ -7,10 +7,13 @@ import { ComponentToolbox } from "@/features/editor/components/ComponentToolbox"
 import { EditorCanvas } from "@/features/editor/components/EditorCanvas";
 import { PropertiesPanel } from "@/features/editor/components/PropertiesPanel";
 import { SavedTemplatesPanel } from "@/features/templates/components/SavedTemplatesPanel";
+import { DocumentPreviewModal } from "@/features/preview/components/DocumentPreviewModal";
+import { CleanDocumentSheet } from "@/features/preview/components/CleanDocumentSheet";
 import { useNavbar } from "@/hooks/useNavbar";
 import { useMounted } from "@/hooks/useMounted";
 import { useEditorState } from "@/features/editor/hooks/useEditorState";
 import { useTemplatesState } from "@/features/templates/hooks/useTemplatesState";
+import { PAPER_SIZES } from "@/features/editor/types";
 
 export default function DocumentEditorPage() {
   const isMounted = useMounted();
@@ -20,6 +23,7 @@ export default function DocumentEditorPage() {
   const toggleToolbox = useNavbar((s) => s.toggleToolbox);
   const setToolboxOpen = useNavbar((s) => s.setToolboxOpen);
   const scrollToProperties = useNavbar((s) => s.scrollToProperties);
+  const openPreview = useNavbar((s) => s.openPreview);
 
   // Templates Management Store (Single source of truth for saved templates & tabs)
   const templates = useTemplatesState((s) => s.templates);
@@ -36,6 +40,13 @@ export default function DocumentEditorPage() {
   const paperSize = useEditorState((s) => s.paperSize);
   const loadTemplate = useEditorState((s) => s.loadTemplate);
   const saveCurrentTemplate = useEditorState((s) => s.saveCurrentTemplate);
+
+  // Unified save handler that updates both Editor storage and Template list timestamps
+  const handleSave = () => {
+    saveTemplateData(activeTemplateId, { metadata, pages, paperSize });
+    useTemplatesState.getState().saveCurrentTemplate({ metadata, pages, paperSize });
+    saveCurrentTemplate();
+  };
 
   // Restore the active template data from its distinct localStorage slot on initial client mount
   useEffect(() => {
@@ -99,8 +110,39 @@ export default function DocumentEditorPage() {
       <Header
         onToggleToolbox={toggleToolbox}
         onToggleProperties={scrollToProperties}
-        onSave={saveCurrentTemplate}
+        onSave={handleSave}
+        onPreview={openPreview}
       />
+
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal />
+
+      {/* Clean Multi-Page Document Sheets Container for Instant PDF Export */}
+      <div
+        id="clean-export-root"
+        style={{
+          position: "fixed",
+          top: "0px",
+          left: "0px",
+          width: `${PAPER_SIZES[paperSize]?.widthPx || 1056}px`,
+          zIndex: -9999,
+          pointerEvents: "none",
+          opacity: 1,
+          visibility: "visible",
+        }}
+        aria-hidden="true"
+      >
+        {pages.map((p, idx) => (
+          <CleanDocumentSheet
+            key={p.pageNumber}
+            page={p}
+            pageIndex={idx}
+            totalPages={pages.length}
+            metadata={metadata}
+            paperSize={paperSize}
+          />
+        ))}
+      </div>
 
       {/* Multi-Template Tab Bar (Synchronized with saved templates list) */}
       <TabBar

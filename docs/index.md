@@ -45,7 +45,7 @@ The editor interface is structured into distinct functional zones designed for f
 | :--- | :--- | :--- |
 | **[Editor Feature Guide](./editor.md)** | `src/features/editor/` | Component Toolbox, Dynamic Canvas Blocks, Multi-Paper Size Engine (**Tabloid / Ledger Default**, A4, Letter, Legal) with Table Row Splitting, Inline & Cell Typography, Dynamic Header & Divider Grid Rows, Image & Shape Blocks, Interactive Column Drag-Resizing, and Canvas-Driven ↕ Row Margin Resizing. |
 | **[Templates Feature Guide](./templates.md)** | `src/features/templates/` | Multi-template tab synchronization (new tabs default to Tabloid), distinct per-template LocalStorage slots (`doc_template_data_<id>`) preserving paper size and layout, legacy template auto-migration, and Saved Templates Panel. |
-| **[Export Feature Guide](./export.md)** | `src/features/export/` | Client-side PDF generation via `html2canvas` and `jspdf`, multi-paper format pagination, visual styling fidelity, and download pipelines. |
+| **[Export Feature Guide](./export.md)** | `src/features/export/` | Client-side PDF generation via `html2canvas-pro` and `jspdf`, multi-paper format pagination, 100% canvas-preview visual parity, and direct download pipelines without print modals. |
 
 ---
 

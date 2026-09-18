@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useMounted } from "@/hooks/useMounted";
-import { useEditorState, getPageLayoutRows } from "../hooks/useEditorState";
+import { useEditorState, getPageLayoutRows, isMatchingTableBlock } from "../hooks/useEditorState";
 import {
   TableBlock,
   TextBlock,
@@ -40,6 +40,12 @@ import {
   DragMoveEvent,
   DragEndEvent,
 } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface RowMarginHandleProps {
   rowId: string;
@@ -165,6 +171,346 @@ function AutoExpandingTextarea({
   );
 }
 
+interface SortableTableRowProps {
+  row: TableRowItem;
+  index: number;
+  columns: TableColumn[];
+  pageNum: number;
+  tableBlock: TableBlock;
+  isSelected: boolean;
+  hasRowSpacing: boolean;
+  isNoBorder: boolean;
+  borderStyle: string;
+  cellPadding: number;
+  isCellSelected: (rowId: number, colId: string) => boolean;
+  getEffectiveCellStyle: (
+    row: TableRowItem,
+    colId: string,
+    defaultAlign?: "left" | "center" | "right"
+  ) => React.CSSProperties;
+  handleCellFocus: (rowId: number, colId: string) => void;
+  updateTableRow: (
+    pageNumber: number,
+    blockId: string,
+    rowId: number,
+    field: string,
+    value: string | number
+  ) => void;
+}
+
+function SortableTableRow({
+  row,
+  index,
+  columns,
+  pageNum,
+  tableBlock,
+  isSelected,
+  hasRowSpacing,
+  isNoBorder,
+  borderStyle,
+  cellPadding,
+  isCellSelected,
+  getEffectiveCellStyle,
+  handleCellFocus,
+  updateTableRow,
+}: SortableTableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: `table-row-${tableBlock.id}-${row.id}`,
+    data: {
+      type: "table-row",
+      blockId: tableBlock.id,
+      pageNum,
+      rowId: row.id,
+      index,
+    },
+  });
+
+  const sortableStyle: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    position: isDragging ? "relative" : undefined,
+    borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={sortableStyle}
+      className={`group/row hover:bg-slate-50/50 transition ${
+        hasRowSpacing ? "bg-white shadow-2xs rounded-lg" : ""
+      } ${isDragging ? "bg-blue-50/90 shadow-md ring-2 ring-blue-400 opacity-75" : ""}`}
+    >
+      {/* Drag Handle */}
+      <td
+        {...attributes}
+        {...listeners}
+        style={{
+          paddingTop: `${cellPadding}px`,
+          paddingBottom: `${cellPadding}px`,
+          paddingLeft: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
+          paddingRight: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
+          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+          touchAction: "none",
+          ...(hasRowSpacing && !isNoBorder
+            ? {
+                borderTop: borderStyle,
+                borderBottom: borderStyle,
+                borderLeft: borderStyle,
+              }
+            : {}),
+        }}
+        className={`text-center text-slate-300 group-hover/row:text-slate-500 cursor-grab active:cursor-grabbing transition-opacity select-none ${
+          isSelected
+            ? "opacity-100"
+            : "opacity-0 group-hover/table:opacity-100"
+        } ${hasRowSpacing ? "rounded-l-lg" : ""}`}
+        title="Drag to reorder row"
+      >
+        <GripVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 mx-auto pointer-events-none" />
+      </td>
+
+      {/* Row Index */}
+      <td
+        style={{
+          paddingTop: `${cellPadding}px`,
+          paddingBottom: `${cellPadding}px`,
+          paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
+          paddingRight: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
+          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+          ...(hasRowSpacing && !isNoBorder
+            ? { borderTop: borderStyle, borderBottom: borderStyle }
+            : {}),
+        }}
+        className="text-center font-bold text-slate-700 select-none"
+      >
+        {index + 1}
+      </td>
+
+      {/* Dynamic Columns Rendering */}
+      {columns.map((col, colIdx) => {
+        const isSelectedCell = isCellSelected(row.id, col.id);
+        const cellStyle = getEffectiveCellStyle(row, col.id, col.align);
+        const isLastCol = colIdx === columns.length - 1;
+
+        const commonCellBorder = {
+          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
+          ...(hasRowSpacing && !isNoBorder
+            ? {
+                borderTop: borderStyle,
+                borderBottom: borderStyle,
+                ...(isLastCol ? { borderRight: borderStyle } : {}),
+              }
+            : {}),
+        };
+
+        if (col.id === "item") {
+          return (
+            <td
+              key={col.id}
+              style={{
+                paddingTop: `${cellPadding}px`,
+                paddingBottom: `${cellPadding}px`,
+                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                ...commonCellBorder,
+              }}
+              className={hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}
+            >
+              <input
+                type="text"
+                value={row.item ?? ""}
+                onFocus={() => handleCellFocus(row.id, col.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCellFocus(row.id, col.id);
+                }}
+                onChange={(e) =>
+                  updateTableRow(
+                    pageNum,
+                    tableBlock.id,
+                    row.id,
+                    "item",
+                    e.target.value
+                  )
+                }
+                style={cellStyle}
+                className={`border rounded-md px-2.5 sm:px-3 py-1 w-full outline-none transition-all ${
+                  isSelectedCell
+                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
+                }`}
+              />
+            </td>
+          );
+        }
+
+        if (col.id === "qty") {
+          return (
+            <td
+              key={col.id}
+              style={{
+                paddingTop: `${cellPadding}px`,
+                paddingBottom: `${cellPadding}px`,
+                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                ...commonCellBorder,
+              }}
+              className={`text-center ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
+            >
+              <input
+                type="number"
+                value={row.qty ?? 0}
+                onFocus={() => handleCellFocus(row.id, col.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCellFocus(row.id, col.id);
+                }}
+                onChange={(e) =>
+                  updateTableRow(
+                    pageNum,
+                    tableBlock.id,
+                    row.id,
+                    "qty",
+                    Number(e.target.value) || 0
+                  )
+                }
+                style={cellStyle}
+                className={`border rounded-md px-2 sm:px-2.5 py-1 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
+                  isSelectedCell
+                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
+                }`}
+              />
+            </td>
+          );
+        }
+
+        if (col.id === "unitPrice") {
+          return (
+            <td
+              key={col.id}
+              style={{
+                paddingTop: `${cellPadding}px`,
+                paddingBottom: `${cellPadding}px`,
+                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                ...commonCellBorder,
+              }}
+              className={`text-center ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
+            >
+              <input
+                type="text"
+                value={row.unitPrice ?? ""}
+                onFocus={() => handleCellFocus(row.id, col.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCellFocus(row.id, col.id);
+                }}
+                onChange={(e) =>
+                  updateTableRow(
+                    pageNum,
+                    tableBlock.id,
+                    row.id,
+                    "unitPrice",
+                    e.target.value
+                  )
+                }
+                style={cellStyle}
+                className={`text-center outline-none border rounded-md px-2 py-1 w-16 sm:w-20 transition-all ${
+                  isSelectedCell
+                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
+                }`}
+              />
+            </td>
+          );
+        }
+
+        if (col.id === "amount") {
+          return (
+            <td
+              key={col.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCellFocus(row.id, col.id);
+              }}
+              style={{
+                ...cellStyle,
+                paddingTop: `${cellPadding}px`,
+                paddingBottom: `${cellPadding}px`,
+                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                ...commonCellBorder,
+              }}
+              className={`text-right cursor-pointer rounded-md transition-all ${
+                isSelectedCell
+                  ? "ring-2 ring-blue-500/40 bg-blue-50/60 font-semibold"
+                  : "hover:bg-slate-100/60"
+              } ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
+            >
+              {row.amount}
+            </td>
+          );
+        }
+
+        // Custom dynamic column
+        const cellValue = row[col.id];
+        const displayVal =
+          typeof cellValue === "string" || typeof cellValue === "number"
+            ? cellValue
+            : "";
+
+        return (
+          <td
+            key={col.id}
+            style={{
+              paddingTop: `${cellPadding}px`,
+              paddingBottom: `${cellPadding}px`,
+              paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+              paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+              ...commonCellBorder,
+            }}
+            className={hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}
+          >
+            <input
+              type="text"
+              value={displayVal}
+              onFocus={() => handleCellFocus(row.id, col.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCellFocus(row.id, col.id);
+              }}
+              onChange={(e) =>
+                updateTableRow(
+                  pageNum,
+                  tableBlock.id,
+                  row.id,
+                  col.id,
+                  e.target.value
+                )
+              }
+              style={cellStyle}
+              className={`border rounded-md px-2.5 sm:px-3 py-1 w-full outline-none transition-all ${
+                isSelectedCell
+                  ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                  : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
+              }`}
+            />
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
 export function EditorCanvas() {
   const isMounted = useMounted();
   const metadata = useEditorState((s) => s.metadata);
@@ -193,6 +539,7 @@ export function EditorCanvas() {
   const updateTableRow = useEditorState((s) => s.updateTableRow);
   const addTableRow = useEditorState((s) => s.addTableRow);
   const deleteTableRow = useEditorState((s) => s.deleteTableRow);
+  const reorderTableRows = useEditorState((s) => s.reorderTableRows);
   const addTableColumn = useEditorState((s) => s.addTableColumn);
   const deleteTableColumn = useEditorState((s) => s.deleteTableColumn);
   const updateTableTitle = useEditorState((s) => s.updateTableTitle);
@@ -256,7 +603,9 @@ export function EditorCanvas() {
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const data = event.active.data.current;
+    const { active, over } = event;
+    const data = active.data.current;
+
     if (data?.type === "row-margin") {
       const { rowId, edge, initialMargin } = data;
       const finalMargin = Math.max(0, Math.min(300, Math.round(initialMargin + event.delta.y)));
@@ -264,6 +613,36 @@ export function EditorCanvas() {
         [edge === "top" ? "marginTop" : "marginBottom"]: finalMargin,
       });
       setResizingMarginInfo(null);
+      return;
+    }
+
+    if (data?.type === "table-row" && over) {
+      const blockId = data.blockId;
+      const pageNum = data.pageNum ?? activePage;
+      const activeRowId = data.rowId;
+      const overRowId = over.data.current?.rowId;
+
+      if (activeRowId !== undefined && overRowId !== undefined && activeRowId !== overRowId) {
+        const page = pages.find((p) => p.pageNumber === pageNum) || pages[0];
+        let foundTable: TableBlock | null = null;
+        getPageLayoutRows(page).forEach((r) => {
+          r.columns.forEach((c) => {
+            c.blocks.forEach((b) => {
+              if (b.type === "table" && (b.id === blockId || isMatchingTableBlock(b, blockId))) {
+                foundTable = b as TableBlock;
+              }
+            });
+          });
+        });
+
+        if (foundTable) {
+          const sourceIndex = (foundTable as TableBlock).rows.findIndex((r) => r.id === activeRowId);
+          const destIndex = (foundTable as TableBlock).rows.findIndex((r) => r.id === overRowId);
+          if (sourceIndex !== -1 && destIndex !== -1 && sourceIndex !== destIndex) {
+            reorderTableRows(pageNum, blockId, sourceIndex, destIndex);
+          }
+        }
+      }
     }
   };
 
@@ -710,273 +1089,30 @@ export function EditorCanvas() {
                   </tr>
                 </thead>
                 <tbody className="text-xs sm:text-sm">
-                  {tableBlock.rows.map((row, index) => (
-                    <tr
-                      key={row.id}
-                      style={{
-                        borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
-                      }}
-                      className={`group/row hover:bg-slate-50/50 transition ${
-                        hasRowSpacing ? "bg-white shadow-2xs rounded-lg" : ""
-                      }`}
-                    >
-                      {/* Drag Handle */}
-                      <td
-                        style={{
-                          paddingTop: `${cellPadding}px`,
-                          paddingBottom: `${cellPadding}px`,
-                          paddingLeft: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
-                          paddingRight: `${Math.max(2, Math.round(cellPadding * 0.5))}px`,
-                          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
-                          ...(hasRowSpacing && !isNoBorder
-                            ? {
-                                borderTop: borderStyle,
-                                borderBottom: borderStyle,
-                                borderLeft: borderStyle,
-                              }
-                            : {}),
-                        }}
-                        className={`text-center text-slate-300 group-hover/row:text-slate-500 cursor-grab transition-opacity ${
-                          isSelected
-                            ? "opacity-100"
-                            : "opacity-0 group-hover/table:opacity-100"
-                        } ${hasRowSpacing ? "rounded-l-lg" : ""}`}
-                      >
-                        <GripVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 mx-auto" />
-                      </td>
-
-                      {/* Row Index */}
-                      <td
-                        style={{
-                          paddingTop: `${cellPadding}px`,
-                          paddingBottom: `${cellPadding}px`,
-                          paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
-                          paddingRight: `${Math.max(4, Math.round(cellPadding * 0.75))}px`,
-                          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
-                          ...(hasRowSpacing && !isNoBorder
-                            ? { borderTop: borderStyle, borderBottom: borderStyle }
-                            : {}),
-                        }}
-                        className="text-center font-bold text-slate-700"
-                      >
-                        {index + 1}
-                      </td>
-
-                      {/* Dynamic Columns Rendering */}
-                      {columns.map((col, colIdx) => {
-                        const isSelectedCell = isCellSelected(row.id, col.id);
-                        const cellStyle = getEffectiveCellStyle(row, col.id, col.align);
-                        const isLastCol = colIdx === columns.length - 1;
-
-                        const commonCellBorder = {
-                          borderBottom: !hasRowSpacing && !isNoBorder ? borderStyle : undefined,
-                          ...(hasRowSpacing && !isNoBorder
-                            ? {
-                                borderTop: borderStyle,
-                                borderBottom: borderStyle,
-                                ...(isLastCol ? { borderRight: borderStyle } : {}),
-                              }
-                            : {}),
-                        };
-
-                        if (col.id === "item") {
-                          return (
-                            <td
-                              key={col.id}
-                              style={{
-                                paddingTop: `${cellPadding}px`,
-                                paddingBottom: `${cellPadding}px`,
-                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                ...commonCellBorder,
-                              }}
-                              className={hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}
-                            >
-                              <input
-                                type="text"
-                                value={row.item ?? ""}
-                                onFocus={() => handleCellFocus(row.id, col.id)}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCellFocus(row.id, col.id);
-                                }}
-                                onChange={(e) =>
-                                  updateTableRow(
-                                    pageNum,
-                                    tableBlock.id,
-                                    row.id,
-                                    "item",
-                                    e.target.value
-                                  )
-                                }
-                                style={cellStyle}
-                                className={`border rounded-md px-2.5 sm:px-3 py-1 w-full outline-none transition-all ${
-                                  isSelectedCell
-                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
-                                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
-                                }`}
-                              />
-                            </td>
-                          );
-                        }
-
-                        if (col.id === "qty") {
-                          return (
-                            <td
-                              key={col.id}
-                              style={{
-                                paddingTop: `${cellPadding}px`,
-                                paddingBottom: `${cellPadding}px`,
-                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                ...commonCellBorder,
-                              }}
-                              className={`text-center ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
-                            >
-                              <input
-                                type="number"
-                                value={row.qty ?? 0}
-                                onFocus={() => handleCellFocus(row.id, col.id)}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCellFocus(row.id, col.id);
-                                }}
-                                onChange={(e) =>
-                                  updateTableRow(
-                                    pageNum,
-                                    tableBlock.id,
-                                    row.id,
-                                    "qty",
-                                    Number(e.target.value) || 0
-                                  )
-                                }
-                                style={cellStyle}
-                                className={`border rounded-md px-2 sm:px-2.5 py-1 text-center outline-none w-14 sm:w-16 mx-auto transition-all ${
-                                  isSelectedCell
-                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
-                                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
-                                }`}
-                              />
-                            </td>
-                          );
-                        }
-
-                        if (col.id === "unitPrice") {
-                          return (
-                            <td
-                              key={col.id}
-                              style={{
-                                paddingTop: `${cellPadding}px`,
-                                paddingBottom: `${cellPadding}px`,
-                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                ...commonCellBorder,
-                              }}
-                              className={`text-center ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
-                            >
-                              <input
-                                type="text"
-                                value={row.unitPrice ?? ""}
-                                onFocus={() => handleCellFocus(row.id, col.id)}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCellFocus(row.id, col.id);
-                                }}
-                                onChange={(e) =>
-                                  updateTableRow(
-                                    pageNum,
-                                    tableBlock.id,
-                                    row.id,
-                                    "unitPrice",
-                                    e.target.value
-                                  )
-                                }
-                                style={cellStyle}
-                                className={`text-center outline-none border rounded-md px-2 py-1 w-16 sm:w-20 transition-all ${
-                                  isSelectedCell
-                                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
-                                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
-                                }`}
-                              />
-                            </td>
-                          );
-                        }
-
-                        if (col.id === "amount") {
-                          return (
-                            <td
-                              key={col.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCellFocus(row.id, col.id);
-                              }}
-                              style={{
-                                ...cellStyle,
-                                paddingTop: `${cellPadding}px`,
-                                paddingBottom: `${cellPadding}px`,
-                                paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                                ...commonCellBorder,
-                              }}
-                              className={`text-right cursor-pointer rounded-md transition-all ${
-                                isSelectedCell
-                                  ? "ring-2 ring-blue-500/40 bg-blue-50/60 font-semibold"
-                                  : "hover:bg-slate-100/60"
-                              } ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
-                            >
-                              {row.amount}
-                            </td>
-                          );
-                        }
-
-                        // Custom dynamic column
-                        const cellValue = row[col.id];
-                        const displayVal =
-                          typeof cellValue === "string" || typeof cellValue === "number"
-                            ? cellValue
-                            : "";
-
-                        return (
-                          <td
-                            key={col.id}
-                            style={{
-                              paddingTop: `${cellPadding}px`,
-                              paddingBottom: `${cellPadding}px`,
-                              paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                              paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
-                              ...commonCellBorder,
-                            }}
-                            className={hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}
-                          >
-                            <input
-                              type="text"
-                              value={displayVal}
-                              onFocus={() => handleCellFocus(row.id, col.id)}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCellFocus(row.id, col.id);
-                              }}
-                              onChange={(e) =>
-                                updateTableRow(
-                                  pageNum,
-                                  tableBlock.id,
-                                  row.id,
-                                  col.id,
-                                  e.target.value
-                                )
-                              }
-                              style={cellStyle}
-                              className={`border rounded-md px-2.5 sm:px-3 py-1 w-full outline-none transition-all ${
-                                isSelectedCell
-                                  ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
-                                  : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
-                              }`}
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                  <SortableContext
+                    items={tableBlock.rows.map((r) => `table-row-${tableBlock.id}-${r.id}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {tableBlock.rows.map((row, index) => (
+                      <SortableTableRow
+                        key={row.id}
+                        row={row}
+                        index={index}
+                        columns={columns}
+                        pageNum={pageNum}
+                        tableBlock={tableBlock}
+                        isSelected={isSelected}
+                        hasRowSpacing={hasRowSpacing}
+                        isNoBorder={isNoBorder}
+                        borderStyle={borderStyle}
+                        cellPadding={cellPadding}
+                        isCellSelected={isCellSelected}
+                        getEffectiveCellStyle={getEffectiveCellStyle}
+                        handleCellFocus={handleCellFocus}
+                        updateTableRow={updateTableRow}
+                      />
+                    ))}
+                  </SortableContext>
                 </tbody>
               </table>
             </div>
@@ -1450,9 +1586,9 @@ export function EditorCanvas() {
           setSelectedRowId(null);
           setSelectedColumnId(null);
         }}
-        className="w-full mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all duration-200 space-y-6 relative"
+        className="w-full mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all duration-200 relative"
       >
-        <div className="space-y-6 sm:space-y-8">
+        <div className="space-y-4 sm:space-y-6 flex-1">
           {/* Subsequent Page Compact Header */}
           {currentPage.pageNumber > 1 && (
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-2">
@@ -1818,7 +1954,7 @@ export function EditorCanvas() {
         </div>
 
         {/* Canvas Footer */}
-        <div className="pt-6 sm:pt-8 flex flex-col sm:flex-row items-center sm:items-end justify-between gap-3 sm:gap-0 border-t border-slate-100 mt-6 sm:mt-8">
+        <div className="pt-6 sm:pt-8 flex flex-col sm:flex-row items-center sm:items-end justify-between gap-3 sm:gap-0 border-t border-slate-100 mt-auto">
           <p className="text-[11px] sm:text-xs text-slate-400 italic text-center sm:text-left">
             Page {currentPage.pageNumber} of {pages.length} — Full PDF layout rendered on export.
           </p>
