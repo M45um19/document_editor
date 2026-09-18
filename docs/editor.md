@@ -35,9 +35,9 @@ Located at the top of the viewport (`h-14 sm:h-16 2xl:h-20`, white background, b
 * **Project Name Field:** Inline text input (`Project Name`) with default value `"Document Project V1"`.
 * **Action Buttons (Right Section):**
   * `Properties` (`SlidersHorizontal` icon, mobile only): Smoothly scrolls down to the properties panel on small screens.
-  * `Preview` (`Eye` icon): Document preview trigger.
-  * `Save` (`Save` icon): Calls `saveCurrentTemplate()`.
-  * `Download PDF` (`Download` icon): Primary action button (`bg-blue-600 text-white`) for PDF export.
+  * `Preview` (`Eye` icon): Opens the high-fidelity **Document Preview Modal** (`DocumentPreviewModal.tsx`), displaying clean, multi-page print-accurate views with zero editor chrome, continuous (All Pages) or single-page view modes, and direct PDF download.
+  * `Save` (`Save` icon): Persists active document state to dedicated LocalStorage slots, updates template timestamp in `useTemplatesState`, and displays an animated emerald confirmation badge (`Saved!` with `Check` icon).
+  * `Download PDF` (`Download` icon): Automatically triggers direct client-side high-resolution PDF download (`pdfExportService.ts` via `html2canvas-pro` + `jsPDF`) formatted to the active paper dimensions (Tabloid, A4, Letter, Legal) with zero print modals.
 
 ---
 
@@ -92,6 +92,13 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
   * Draggable resize handles (`cursor-col-resize`) sit between adjacent column pairs.
   * Adjusting a divider line recalculates the left and right column percentage widths in real time (`handleResizeMouseDown`).
   * Enforces an `8%` minimum column width boundary to prevent column collapse.
+* **Drag-and-Drop Table Row Reordering:**
+  * Each table row features an interactive vertical drag handle (`GripVertical` icon) on the left.
+  * Powered by `@dnd-kit/core` and `@dnd-kit/sortable`, users can grab any row and drag it to any position in the table (e.g., drag row 3 to position 1).
+  * Smooth translation animations and distinct drop indicator styling (`bg-blue-50/90 ring-2 ring-blue-400 opacity-75`).
+  * Row index numbering (`1, 2, 3...`) automatically updates sequentially.
+  * Drag listeners are attached specifically to the grip handle cell, keeping table input fields fully selectable, focusable, and editable without drag interference.
+  * Persists row reordering instantly to Zustand store and localStorage with bi-directional auto-pagination reflow.
 * **Inline Editable Table Heading & Column Names:**
   * **Table Heading:** Direct inline input next to the spreadsheet icon to rename headings (e.g. `"QUOTATION ITEMS"`).
   * **Column Names:** Each `<th>` header is an inline input allowing users to customize column labels directly in place.

@@ -172,8 +172,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.27 × 11.69 in",
     widthPx: 794,
     minHeightPx: 1123,
-    page1Capacity: 16.0,
-    pageNCapacity: 19.0,
+    page1Capacity: 22.0,
+    pageNCapacity: 26.0,
   },
   letter: {
     id: "letter",
@@ -184,8 +184,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.5 × 11 in",
     widthPx: 816,
     minHeightPx: 1056,
-    page1Capacity: 13.5,
-    pageNCapacity: 16.0,
+    page1Capacity: 20.0,
+    pageNCapacity: 24.0,
   },
   legal: {
     id: "legal",
@@ -196,8 +196,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.5 × 14 in",
     widthPx: 816,
     minHeightPx: 1344,
-    page1Capacity: 21.0,
-    pageNCapacity: 25.0,
+    page1Capacity: 28.0,
+    pageNCapacity: 32.0,
   },
   tabloid: {
     id: "tabloid",
@@ -208,8 +208,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "11 × 17 in",
     widthPx: 1056,
     minHeightPx: 1632,
-    page1Capacity: 25.0,
-    pageNCapacity: 30.0,
+    page1Capacity: 36.0,
+    pageNCapacity: 42.0,
   },
 };
 

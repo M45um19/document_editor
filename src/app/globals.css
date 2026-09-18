@@ -9,3 +9,16 @@
 body {
   font-family: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
+
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  header,
+  nav,
+  aside,
+  #clean-export-root,
+  .no-print {
+    display: none !important;
+  }
+}
