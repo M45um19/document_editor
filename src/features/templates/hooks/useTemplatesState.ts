@@ -21,6 +21,10 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
       layoutRows: [
         {
           id: "page-row-meta",
+          marginTop: 0,
+          marginBottom: 16,
+          paddingTop: 6,
+          paddingBottom: 6,
           columns: [
             {
               id: "col-meta-issuer",
@@ -71,6 +75,10 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
         },
         {
           id: "page-row-table",
+          marginTop: 0,
+          marginBottom: 16,
+          paddingTop: 6,
+          paddingBottom: 6,
           columns: [
             {
               id: "col-table-main",
@@ -79,6 +87,10 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
                   id: "initial-table-1",
                   type: "table",
                   title: "QUOTATION ITEMS",
+                  tableWidth: "100%",
+                  borderStyle: "1px solid #E5E7EB",
+                  padding: 8,
+                  rowSpacing: 0,
                   rows: [
                     { id: 1, item: "Product A", qty: 2, unitPrice: "$10.00", amount: "$20.00" },
                     { id: 2, item: "Product B", qty: 3, unitPrice: "$10.00", amount: "$45.00" },
@@ -127,6 +139,10 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
           id: "initial-table-1",
           type: "table",
           title: "QUOTATION ITEMS",
+          tableWidth: "100%",
+          borderStyle: "1px solid #E5E7EB",
+          padding: 8,
+          rowSpacing: 0,
           rows: [
             { id: 1, item: "Product A", qty: 2, unitPrice: "$10.00", amount: "$20.00" },
             { id: 2, item: "Product B", qty: 3, unitPrice: "$10.00", amount: "$45.00" },
