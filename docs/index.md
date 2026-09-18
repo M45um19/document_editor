@@ -12,21 +12,24 @@ The editor interface is structured into distinct functional zones designed for f
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Top Application Header: Logo | Project Name | Undo/Redo | Preview | Save | Download PDF          │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Multi-Template Tab Bar: [Template-1 ✕] [Template-2 ✕] [+]                                        │
+│ Multi-Template Tab Bar: [Template-1 ✕] [Template-2 ✕] [+] (New Tabs Default to Tabloid)          │
 ├───────────────────┬──────────────────────────────────────────────┬───────────────────────────────┤
 │ Left Toolbox      │ Center Document Canvas                       │ Right Properties Panel        │
-│ (Dark Theme)      │ (A4 White Sheet on Slate Canvas)             │ (Typography & Layout Grid)    │
+│ (Dark Theme)      │ (Tabloid/A4/Letter/Legal Sheet on Slate)     │ (Typography & Layout Grid)    │
 │                   │                                              │                               │
-│ • Components:     │ • Viewport Controls (A4 Badge, Zoom, Full)   │ • Context Typography:         │
-│   - Select        │ • Dynamic Header Row (Logo, Company, Title)  │   - Target: Block / Cell      │
-│   - Text Block    │ • Accent Divider Row (ShapeBlock Line)       │   - Font Family / Size / Wt   │
-│   - Simple Table  │ • 3-Column Metadata Grid (Issuer, Client...) │   - Color Picker / Alignment  │
-│   - Image Block   │ • Page Grid Rows & Drag-Resizable Columns    │ • Image & Logo Settings:      │
-│   - Shape Block   │ • Drag-and-Drop ↕ Row Margin Handles         │   - Preset Blue Logo / Upload │
-│ • Quick Actions   │ • Clean Idle View vs. Hover/Select Controls  │   - Width / Height / Align    │
-│ • Pages Manager   │ • Dynamic Blocks (Table, Text, Image, Shape) │ • Divider & Table Settings    │
-│                   │ • Multi-Page Continuation & Row Splitting    │ • Page Grid Management:       │
-│                   │ • Visual Footer Graphic                      │   - Row / Column Add & Delete │
+│ • Components:     │ • Viewport Controls:                         │ • Typography Settings:        │
+│   - Select        │   - Paper Size (Tabloid/A4/Letter/Legal)     │   - Font Family / Size / Wt   │
+│   - Text Block    │   - Pagination [← Page N of Total →]         │   - Color Picker / Alignment  │
+│   - Simple Table  │   - Zoom (75% - 150%) / Fullscreen           │ • Image & Logo Settings:      │
+│   - Image Block   │ • Dynamic Header Row (Logo, Company, Title)  │   - Preset Blue Logo / Upload │
+│   - Shape Block   │ • Accent Divider Row (ShapeBlock Line)       │   - Width / Height / Align    │
+│ • Quick Actions   │ • 3-Column Metadata Grid (Issuer, Client...) │ • Divider & Table Settings    │
+│ • Pages Manager   │ • Page Grid Rows & Drag-Resizable Columns    │ • Page Grid Management:       │
+│                   │ • Drag-and-Drop ↕ Row Margin Handles         │   - Row / Column Add & Delete │
+│                   │ • Clean Idle View vs. Hover/Select Controls  │                               │
+│                   │ • Dynamic Blocks (Table, Text, Image, Shape) │                               │
+│                   │ • Multi-Page Continuation & Row Splitting    │                               │
+│                   │ • Visual Footer Graphic                      │                               │
 ├───────────────────┴──────────────────────────────────────────────┴───────────────────────────────┤
 │ Bottom Section: Saved Templates Panel (Full width under Canvas + Properties)                     │
 │ • "Save as Current Template" Outlined CTA                                                        │
@@ -40,9 +43,9 @@ The editor interface is structured into distinct functional zones designed for f
 
 | Guide | Target Feature Folder | Key Responsibilities |
 | :--- | :--- | :--- |
-| **[Editor Feature Guide](./editor.md)** | `src/features/editor/` | Component Toolbox, Dynamic Canvas Blocks, Multi-Page A4 Engine with Table Row Splitting, Inline & Cell Typography, Dynamic Header & Divider Grid Rows, Image & Shape Blocks, Interactive Column Drag-Resizing, and Canvas-Driven ↕ Row Margin Resizing. |
-| **[Templates Feature Guide](./templates.md)** | `src/features/templates/` | Multi-template tab synchronization, distinct per-template LocalStorage slots (`doc_template_data_<id>`), legacy template auto-migration, and Saved Templates Panel. |
-| **[Export Feature Guide](./export.md)** | `src/features/export/` | Client-side PDF generation via `html2canvas` and `jspdf`, multi-page pagination, visual styling fidelity, and download pipelines. |
+| **[Editor Feature Guide](./editor.md)** | `src/features/editor/` | Component Toolbox, Dynamic Canvas Blocks, Multi-Paper Size Engine (**Tabloid / Ledger Default**, A4, Letter, Legal) with Table Row Splitting, Inline & Cell Typography, Dynamic Header & Divider Grid Rows, Image & Shape Blocks, Interactive Column Drag-Resizing, and Canvas-Driven ↕ Row Margin Resizing. |
+| **[Templates Feature Guide](./templates.md)** | `src/features/templates/` | Multi-template tab synchronization (new tabs default to Tabloid), distinct per-template LocalStorage slots (`doc_template_data_<id>`) preserving paper size and layout, legacy template auto-migration, and Saved Templates Panel. |
+| **[Export Feature Guide](./export.md)** | `src/features/export/` | Client-side PDF generation via `html2canvas` and `jspdf`, multi-paper format pagination, visual styling fidelity, and download pipelines. |
 
 ---
 
@@ -53,9 +56,9 @@ The editor interface is structured into distinct functional zones designed for f
    - **Global Layout State:** Shared UI chrome state belongs in `src/hooks/` (`useNavbar.ts`, `useTabBar.ts`, `useMounted.ts`).
    - **Pure Presentation Components:** UI components focus on presentation and receive handlers/props or select scoped state slices.
 
-2. **Standard A4 Layout & Bi-Directional Auto-Pagination:**
-   - Document sheets render in standard A4 dimensions (`210mm × 297mm` / `max-w-[794px] min-h-[1123px]`).
-   - Dynamic pagination automatically splits tables and layout blocks across pages when overflowing, and seamlessly pulls them back when content shrinks.
+2. **Multi-Paper Size Architecture & Bi-Directional Auto-Pagination:**
+   - Supports **Tabloid / Ledger** (`11 × 17 in` / `1056 × 1632 px`, Default), **A4** (`210 × 297 mm` / `794 × 1123 px`), **Letter (US)** (`8.5 × 11 in` / `816 × 1056 px`), and **Legal (US)** (`8.5 × 14 in` / `816 × 1344 px`).
+   - Dynamic bi-directional pagination engine automatically splits tables and layout blocks across pages when overflowing based on the selected paper's height budget, and seamlessly merges them back when switching to taller formats or deleting content.
 
 3. **Fully Dynamic Grid-Based Header System:**
    - All header elements (Company Logo, Company Name, Tagline, Document Title, and Divider Line) are built with modular `PageGridRow` and `PageGridColumn` structures rather than hardcoded markup.

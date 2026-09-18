@@ -17,6 +17,7 @@ export function SavedTemplatesPanel() {
 
   const metadata = useEditorState((s) => s.metadata);
   const pages = useEditorState((s) => s.pages);
+  const paperSize = useEditorState((s) => s.paperSize);
   const loadTemplate = useEditorState((s) => s.loadTemplate);
 
   const [notification, setNotification] = useState<string | null>(null);
@@ -30,13 +31,13 @@ export function SavedTemplatesPanel() {
 
   const handleSaveCurrentAsTemplate = () => {
     const activeTemplate = templates.find((t) => t.id === activeTemplateId);
-    saveCurrentTemplate({ metadata, pages });
+    saveCurrentTemplate({ metadata, pages, paperSize });
     showNotification(`Saved "${activeTemplate?.name || 'Current Template'}" to LocalStorage!`);
   };
 
   const handleOpenTemplate = (template: SavedTemplateItem) => {
     // Save current active template before switching
-    saveTemplateData(activeTemplateId, { metadata, pages });
+    saveTemplateData(activeTemplateId, { metadata, pages, paperSize });
 
     // Select and load target template
     selectTemplate(template.id);
