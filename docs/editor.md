@@ -64,12 +64,16 @@ Fixed left sidebar (`bg-[#081225]` dark theme, `w-52` to `w-80` responsive width
 Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR hydration protection.
 
 * **Viewport Top Controls:**
-  * A4 Status Badge: `A4 • 210 × 297 mm`.
-  * Pagination navigation: `[←] Page N of Total [→]` buttons with boundary disable states.
-  * Zoom dropdown selector (`75%`, `100%`, `125%`, `150%`).
-  * Fullscreen maximize toggle (`Maximize2`).
+  * **Interactive Paper Size Selector:** Dropdown menu supporting **Tabloid / Ledger** (Default, `11 × 17 in` / `279 × 432 mm`), **A4** (`210 × 297 mm`), **Letter (US)** (`8.5 × 11 in`), and **Legal (US)** (`8.5 × 14 in`).
+  * **Pagination navigation:** `[←] Page N of Total [→]` buttons with boundary disable states.
+  * **Zoom dropdown selector:** `75%`, `100%`, `125%`, `150%`.
+  * **Fullscreen maximize toggle:** `Maximize2` button.
 * **Document Sheet Container (`#document-sheet`):**
-  * Exact standard A4 dimensions (`max-w-[794px] min-h-[1123px]`).
+  * Dynamic dimensions applied based on active `paperSize` configuration:
+    * **Tabloid / Ledger:** `max-w-[1056px] min-h-[1632px]` (Default)
+    * **A4:** `max-w-[794px] min-h-[1123px]`
+    * **Letter (US):** `max-w-[816px] min-h-[1056px]`
+    * **Legal (US):** `max-w-[816px] min-h-[1344px]`
   * Clicking the blank document sheet clears active selection and resets canvas to clean document mode.
   * **Dynamic Page Grid Layout Rows:** All document content (including headers) is structured into modular grid rows (`layoutRows: PageGridRow[]`):
     * **Row 1 (`page-row-header`):** 3 columns housing:
@@ -101,18 +105,17 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
 ### 4. Properties & Data Panel (`src/features/editor/components/PropertiesPanel.tsx`)
 Right sidebar (`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px]`, white background, bordered left).
 
-* **Context-Aware Typography Settings:**
-  * Target indicator displays current selection context: Text Block, Table Block, or specific Table Cell.
+* **Typography Settings:**
   * **Font Family:** Inter, Roboto, Outfit, Playfair Display, Merriweather, Fira Code, Arial, Georgia, Courier New.
   * **Font Size:** Numeric input + incremental steppers.
-  * **Font Weight:** Regular (400), Medium (500), Semibold (600), Bold (700), ExtraBold (800).
+  * **Font Weight:** Light (300), Regular (400), Medium (500), Semibold (600), Bold (700), ExtraBold (800).
   * **Text Color:** Native color picker with live hex code display.
   * **Text Alignment:** Left, Center, Right align toggles.
 * **Image & Logo Settings (Contextual):**
   * Displays when an Image block or Logo preset is selected.
   * **Image Source Toggle:** Switch between Preset Blue Logo and Upload Image / Custom URL.
   * **Size Inputs:** Width and Height (supports px and % values).
-  * **Size Presets:** Quick buttons for Logo (42px), 80px, Medium (140px), Full (100%).
+  * **Size Presets:** Quick buttons for Logo (44px), 80px, Medium (140px), Full (100%).
   * **Alignment:** Left, Center, Right alignment.
 * **Divider Settings (Contextual):**
   * Displays when a Shape divider block is selected.
@@ -145,18 +148,22 @@ The grid layout allows flexible column widths using fluid percentage values:
 
 ---
 
-## A4 Page Sheets & Bi-Directional Auto-Pagination Engine
+## Multi-Paper Size & Bi-Directional Auto-Pagination Engine
 
-The editor renders document pages in standard **A4 Sheet Dimensions** (`210mm × 297mm` / `max-w-[794px] min-h-[1123px]`):
+The editor renders document pages according to the chosen paper format:
 
-* **Page 1 Capacity (`PAGE_1_CAPACITY = 13.0` height units)**: Accounts for dynamic header row, divider row, and the 3-column metadata grid.
-* **Continuation Page Capacity (`PAGE_N_CAPACITY = 19.0` height units)**: Continuation pages feature a compact continuation header and expanded usable content capacity.
+| Paper Size | Dimensions (mm) | Dimensions (in) | Canvas Dimensions (px) | Page 1 Budget | Continuation Page Budget |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tabloid / Ledger** | 279 × 432 mm | 11.00 × 17.00 in | 1056 × 1632 px | 25.0 units | 30.0 units |
+| **A4** | 210 × 297 mm | 8.27 × 11.69 in | 794 × 1123 px | 16.0 units | 19.0 units |
+| **Letter (US)** | 216 × 279 mm | 8.50 × 11.00 in | 816 × 1056 px | 13.5 units | 16.0 units |
+| **Legal (US)** | 216 × 356 mm | 8.50 × 14.00 in | 816 × 1344 px | 21.0 units | 25.0 units |
 
 ### Bi-Directional Reflow & Table Row Splitting System (`reflowPages`)
 
 1. **Continuous Sequential Reflow:**
-   - On every state modification, `reflowPages` consolidates all page layout rows, re-merges any split table fragments via `mergeSplitTablesInRows`, and calculates layout row weights.
-2. **Table Row Splitting across A4 Pages:**
+   - On every state modification, `reflowPages` consolidates all page layout rows, re-merges any split table fragments via `mergeSplitTablesInRows`, and calculates layout row weights against the active paper size budget.
+2. **Table Row Splitting across Pages:**
    - Single-table layout rows evaluate their remaining page capacity:
      $$\text{spaceForRows} = \max(0.9, \text{currentCapacity} - \text{currentWeight} - 2.0)$$
      $$\text{maxRowsThatFit} = \max(1, \lfloor\text{spaceForRows} / 0.9\rfloor)$$
@@ -165,7 +172,7 @@ The editor renders document pages in standard **A4 Sheet Dimensions** (`210mm ×
      - The remaining rows overflow to a continuation table block on the next page (`${baseId}-split-${pageNum}`).
      - Table styling (`tableWidth`, `borderStyle`, `padding`, `rowSpacing`, `title`) is preserved across split continuations.
 3. **Underflow & Pull-Back:**
-   - When table rows or layout blocks are deleted, `mergeSplitTablesInRows` recombines all rows. If the entire table fits on Page 1, it pulls back automatically and removes trailing empty pages.
+   - When table rows or layout blocks are deleted or when switching to a taller paper format (e.g. Letter to Tabloid), `mergeSplitTablesInRows` recombines all rows. If the entire table fits on Page 1, it pulls back automatically and removes trailing empty pages.
 4. **Transparent Cross-Fragment Operations:**
    - All table mutation actions resolve table blocks across pages using base ID matching (`isMatchingTableBlock`).
 5. **Auto-Navigation:**
@@ -176,6 +183,72 @@ The editor renders document pages in standard **A4 Sheet Dimensions** (`210mm ×
 ## Data Types & State Contracts
 
 ```typescript
+export type PaperSize = "a4" | "letter" | "legal" | "tabloid";
+
+export interface PaperSizeConfig {
+  id: PaperSize;
+  name: string;
+  label: string;
+  shortLabel: string;
+  dimensionsMm: string;
+  dimensionsIn: string;
+  widthPx: number;
+  minHeightPx: number;
+  page1Capacity: number;
+  pageNCapacity: number;
+}
+
+export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
+  a4: {
+    id: "a4",
+    name: "A4",
+    label: "A4 (210 × 297 mm)",
+    shortLabel: "A4 • 210 × 297 mm",
+    dimensionsMm: "210 × 297 mm",
+    dimensionsIn: "8.27 × 11.69 in",
+    widthPx: 794,
+    minHeightPx: 1123,
+    page1Capacity: 16.0,
+    pageNCapacity: 19.0,
+  },
+  letter: {
+    id: "letter",
+    name: "Letter (US)",
+    label: "Letter (8.5 × 11 in)",
+    shortLabel: "Letter • 8.5 × 11 in",
+    dimensionsMm: "216 × 279 mm",
+    dimensionsIn: "8.5 × 11 in",
+    widthPx: 816,
+    minHeightPx: 1056,
+    page1Capacity: 13.5,
+    pageNCapacity: 16.0,
+  },
+  legal: {
+    id: "legal",
+    name: "Legal (US)",
+    label: "Legal (8.5 × 14 in)",
+    shortLabel: "Legal • 8.5 × 14 in",
+    dimensionsMm: "216 × 356 mm",
+    dimensionsIn: "8.5 × 14 in",
+    widthPx: 816,
+    minHeightPx: 1344,
+    page1Capacity: 21.0,
+    pageNCapacity: 25.0,
+  },
+  tabloid: {
+    id: "tabloid",
+    name: "Tabloid / Ledger",
+    label: "Tabloid (11 × 17 in)",
+    shortLabel: "Tabloid • 11 × 17 in",
+    dimensionsMm: "279 × 432 mm",
+    dimensionsIn: "11 × 17 in",
+    widthPx: 1056,
+    minHeightPx: 1632,
+    page1Capacity: 25.0,
+    pageNCapacity: 30.0,
+  },
+};
+
 export interface BlockTypographyStyle {
   fontFamily?: string;
   fontSize?: number;
@@ -263,8 +336,8 @@ export interface ShapeBlock {
   type: "shape";
   shapeType: "divider" | "banner" | "badge";
   color?: string;
-  height?: number;
-  width?: string;
+  height?: number | string;
+  width?: number | string;
 }
 
 export type CanvasBlock = TableBlock | TextBlock | ImageBlock | ShapeBlock;
@@ -304,5 +377,6 @@ export interface DocumentMetadata {
 export interface DocumentStateSnapshot {
   metadata: DocumentMetadata;
   pages: CanvasPage[];
+  paperSize?: PaperSize;
 }
 ```

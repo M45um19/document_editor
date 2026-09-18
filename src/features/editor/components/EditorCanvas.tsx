@@ -27,6 +27,8 @@ import {
   PageGridRow,
   DEFAULT_TABLE_COLUMNS,
   FONT_FAMILY_MAP,
+  PaperSize,
+  PAPER_SIZES,
 } from "../types";
 import {
   DndContext,
@@ -172,6 +174,8 @@ export function EditorCanvas() {
   const setActivePage = useEditorState((s) => s.setActivePage);
   const zoomLevel = useEditorState((s) => s.zoomLevel);
   const setZoomLevel = useEditorState((s) => s.setZoomLevel);
+  const paperSize = useEditorState((s) => s.paperSize);
+  const setPaperSize = useEditorState((s) => s.setPaperSize);
   const toggleFullscreen = useEditorState((s) => s.toggleFullscreen);
 
   const selectedBlockId = useEditorState((s) => s.selectedBlockId);
@@ -1355,17 +1359,22 @@ export function EditorCanvas() {
     }
   };
 
+  const currentPaperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.tabloid;
+
   return (
     <div className="w-full flex flex-col select-none min-w-0">
       {/* Viewport Top Bar Controls */}
-      <div className="w-full flex items-center justify-between gap-2 mb-2.5 px-1 max-w-[794px] mx-auto">
-        <div className="flex items-center gap-1.5">
+      <div
+        style={{ maxWidth: `${currentPaperConfig.widthPx}px` }}
+        className="w-full flex items-center justify-between gap-2 mb-2.5 px-1 mx-auto transition-all duration-200"
+      >
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             disabled={activePage <= 1}
             onClick={() => setActivePage(activePage - 1)}
             aria-label="Previous page"
-            className="px-2 py-1 rounded bg-white border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs transition"
+            className="px-2 py-1 rounded bg-white border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs transition cursor-pointer"
           >
             ←
           </button>
@@ -1377,13 +1386,27 @@ export function EditorCanvas() {
             disabled={activePage >= pages.length}
             onClick={() => setActivePage(activePage + 1)}
             aria-label="Next page"
-            className="px-2 py-1 rounded bg-white border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs transition"
+            className="px-2 py-1 rounded bg-white border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs transition cursor-pointer"
           >
             →
           </button>
-          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-md shadow-2xs">
-            A4 • 210 × 297 mm
-          </span>
+
+          {/* Paper Size Switcher Dropdown */}
+          <div className="relative inline-flex items-center">
+            <select
+              value={paperSize}
+              onChange={(e) => setPaperSize(e.target.value as PaperSize)}
+              aria-label="Select paper size"
+              className="appearance-none flex items-center gap-1 pl-2.5 pr-6 sm:pr-7 py-1 bg-white border border-slate-200 rounded-md text-[11px] sm:text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-300 transition cursor-pointer outline-none"
+            >
+              {Object.values(PAPER_SIZES).map((ps) => (
+                <option key={ps.id} value={ps.id}>
+                  {ps.shortLabel}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1414,16 +1437,20 @@ export function EditorCanvas() {
         </div>
       </div>
 
-      {/* Main Document Canvas Sheet (A4 Dimensions: 210mm x 297mm / 794px x 1123px) */}
+      {/* Main Document Canvas Sheet (Dynamic Dimensions: A4 / Letter / Legal) */}
       <div
         id="document-sheet"
+        style={{
+          maxWidth: `${currentPaperConfig.widthPx}px`,
+          minHeight: `${currentPaperConfig.minHeightPx}px`,
+        }}
         onClick={() => {
           setSelectedBlockId(null);
           setSelectedCell(null);
           setSelectedRowId(null);
           setSelectedColumnId(null);
         }}
-        className="w-full max-w-[794px] min-h-[1123px] mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all space-y-6 relative"
+        className="w-full mx-auto bg-white rounded-xl shadow-md border border-slate-200/90 p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all duration-200 space-y-6 relative"
       >
         <div className="space-y-6 sm:space-y-8">
           {/* Subsequent Page Compact Header */}

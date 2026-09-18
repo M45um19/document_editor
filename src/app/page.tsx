@@ -33,6 +33,7 @@ export default function DocumentEditorPage() {
   // Editor Store
   const metadata = useEditorState((s) => s.metadata);
   const pages = useEditorState((s) => s.pages);
+  const paperSize = useEditorState((s) => s.paperSize);
   const loadTemplate = useEditorState((s) => s.loadTemplate);
   const saveCurrentTemplate = useEditorState((s) => s.saveCurrentTemplate);
 
@@ -49,7 +50,7 @@ export default function DocumentEditorPage() {
   const handleSelectTab = (tabId: string) => {
     if (tabId === activeTemplateId) return;
     // Auto-save current template data to its distinct localStorage place
-    saveTemplateData(activeTemplateId, { metadata, pages });
+    saveTemplateData(activeTemplateId, { metadata, pages, paperSize });
     // Switch active template
     selectTemplate(tabId);
     // Load target template data from its distinct localStorage place
@@ -60,7 +61,7 @@ export default function DocumentEditorPage() {
   // Handle creating a new template via TabBar '+' button ONLY
   const handleAddTab = () => {
     // Auto-save current template first
-    saveTemplateData(activeTemplateId, { metadata, pages });
+    saveTemplateData(activeTemplateId, { metadata, pages, paperSize });
     // Create new template with dedicated localStorage slot
     const { newTemplate, data } = createTemplate();
     // Load the fresh template into the canvas

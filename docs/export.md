@@ -69,11 +69,15 @@ src/
 * When invoking `html2canvas`, enforce a scale multiplier (minimum `scale: 2` or `window.devicePixelRatio >= 2`) to ensure crisp text and sharp lines in the resulting PDF.
 * Maintain exact CSS box-model fidelity, including borders (`1px solid #E5E7EB`), background fills (`bg-blue-50/70`), and SVG logo marks.
 
-### 3. Standard A4 Dimensions & Multi-Page Pagination
-* Target standard **A4 portrait dimensions** (`210mm x 297mm` / `595.28pt x 841.89pt`).
+### 3. Multi-Paper Format Dimensions & Multi-Page Pagination
+* Target physical document dimensions matching the active paper format:
+  * **Tabloid / Ledger:** `11 × 17 in` (`279 × 432 mm` / `792pt × 1224pt`) — Default
+  * **A4:** `210 × 297 mm` (`595.28pt × 841.89pt`)
+  * **Letter (US):** `8.5 × 11 in` (`216 × 279 mm` / `612pt × 792pt`)
+  * **Legal (US):** `8.5 × 14 in` (`216 × 356 mm` / `612pt × 1008pt`)
 * When a document contains multiple pages (with split tables and continuation sheets):
   * Iterate across all document page containers (`Page 1`, `Page 2`...).
-  * Capture each page at precise A4 proportions.
+  * Capture each page at precise paper proportions.
   * Append pages sequentially using `doc.addPage()`.
 
 ### 4. File Naming Convention
@@ -91,7 +95,7 @@ src/
 ```typescript
 export interface PdfExportOptions {
   fileName?: string;
-  format?: 'a4' | 'letter';
+  format?: 'tabloid' | 'a4' | 'letter' | 'legal';
   orientation?: 'portrait' | 'landscape';
   scale?: number;
   quality?: number; // 0.1 to 1.0 (for JPEG/PNG compression)

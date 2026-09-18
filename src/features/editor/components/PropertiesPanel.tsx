@@ -27,7 +27,6 @@ import {
   BlockTypographyStyle,
   FONT_FAMILY_MAP,
   AVAILABLE_FONTS,
-  DEFAULT_TABLE_COLUMNS,
   DEFAULT_BORDER_STYLE_OPTIONS,
   TableStyleSettings,
 } from "../types";
@@ -110,13 +109,6 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
   const targetRow = isCellActive
     ? tableBlock?.rows.find((r) => r.id === selectedCell.rowId)
     : null;
-  const columns =
-    tableBlock?.columns && tableBlock.columns.length > 0
-      ? tableBlock.columns
-      : DEFAULT_TABLE_COLUMNS;
-  const targetCol = isCellActive
-    ? columns.find((c) => c.id === selectedCell.columnKey)
-    : null;
   const cellStyle = (isCellActive && targetRow?.cellStyles?.[selectedCell.columnKey]) || null;
 
   // Active styling values (cell override > block style > default)
@@ -161,9 +153,6 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
   // Page Grid (Row & Column) Information
   const layoutRows = getPageLayoutRows(currentPageObj);
   const activeGridRow = layoutRows.find((r) => r.id === selectedRowId) || layoutRows[0];
-  const activeGridRowIndex = activeGridRow
-    ? layoutRows.findIndex((r) => r.id === activeGridRow.id) + 1
-    : 1;
   const activeGridColCount = activeGridRow ? activeGridRow.columns.length : 1;
 
   const handleAddPageColumn = () => {
@@ -508,34 +497,6 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
           <span>Text Settings</span>
         </div>
 
-        {/* Scope Indicator Banner */}
-        {activeBlock && (
-          isCellActive && targetRow && targetCol ? (
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-blue-50/90 border border-blue-200 text-xs text-blue-950">
-              <span className="font-semibold truncate">
-                Cell: Row {tableBlock.rows.findIndex((r) => r.id === targetRow.id) + 1} • {targetCol.label}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedCell(null)}
-                className="text-[11px] text-blue-600 hover:text-blue-800 underline ml-2 cursor-pointer shrink-0 font-semibold"
-              >
-                Style Table
-              </button>
-            </div>
-          ) : isTableActive && tableBlock ? (
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-700">
-              <span className="font-semibold truncate">
-                Target: Entire Table ({tableBlock.title})
-              </span>
-              <span className="text-[10px] text-slate-400">Click a cell to style</span>
-            </div>
-          ) : (
-            <div className="px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-700 font-semibold truncate">
-              Target: Text Block
-            </div>
-          )
-        )}
 
         {activeBlock ? (
           <>
@@ -796,14 +757,9 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
 
       {/* Page Column Management */}
       <div className="space-y-2 2xl:space-y-3 pt-2 border-t border-slate-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
-            <Columns className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-blue-600" />
-            <span>Column Management</span>
-          </div>
-          <span className="text-[10px] 2xl:text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-            Row {activeGridRowIndex}: {activeGridColCount} Col{activeGridColCount > 1 ? "s" : ""}
-          </span>
+        <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
+          <Columns className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-blue-600" />
+          <span>Column Management</span>
         </div>
 
         <div className="grid grid-cols-2 gap-2 2xl:gap-3">
@@ -830,14 +786,9 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
 
       {/* Page Row Management */}
       <div className="space-y-2 2xl:space-y-3 pt-2 border-t border-slate-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
-            <Rows className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-slate-700" />
-            <span>Row Management</span>
-          </div>
-          <span className="text-[10px] 2xl:text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-            Page {activePage}: {layoutRows.length} Row{layoutRows.length > 1 ? "s" : ""}
-          </span>
+        <div className="flex items-center gap-2 text-slate-800 font-bold text-xs 2xl:text-sm">
+          <Rows className="w-4 h-4 2xl:w-4.5 2xl:h-4.5 text-slate-700" />
+          <span>Row Management</span>
         </div>
 
         <div className="grid grid-cols-2 gap-2 2xl:gap-3">
@@ -861,6 +812,7 @@ export function PropertiesPanel({ onClose, className = "" }: PropertiesPanelProp
           </button>
         </div>
       </div>
+
     </aside>
   );
 }
