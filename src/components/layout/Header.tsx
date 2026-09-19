@@ -36,8 +36,44 @@ export function Header({
   const pages = useEditorState((s) => s.pages);
   const paperSize = useEditorState((s) => s.paperSize);
 
+  const past = useEditorState((s) => s.past);
+  const future = useEditorState((s) => s.future);
+  const undo = useEditorState((s) => s.undo);
+  const redo = useEditorState((s) => s.redo);
+
+  const canUndo = Boolean(past && past.length > 0);
+  const canRedo = Boolean(future && future.length > 0);
+
   const [isSaved, setIsSaved] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Global keyboard shortcuts for Undo (Ctrl+Z / Cmd+Z) and Redo (Ctrl+Y / Cmd+Shift+Z / Ctrl+Shift+Z)
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = typeof window !== "undefined" && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform);
+      const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+      if (!isCmdOrCtrl) return;
+
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+
+      if (e.key.toLowerCase() === "z") {
+        if (e.shiftKey) {
+          e.preventDefault();
+          redo();
+        } else if (!isInput) {
+          e.preventDefault();
+          undo();
+        }
+      } else if (e.key.toLowerCase() === "y" && !isInput) {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   const handleSave = () => {
     if (onSave) {
@@ -115,19 +151,21 @@ export function Header({
         <div className="hidden md:flex items-center gap-1 2xl:gap-1.5 h-8.5 sm:h-9.5 2xl:h-12 text-slate-500 pl-1">
           <button
             type="button"
-            disabled={true}
-            suppressHydrationWarning
+            disabled={!canUndo}
+            onClick={undo}
             aria-label="Undo"
-            className="h-8.5 w-8.5 2xl:h-10 2xl:w-10 flex items-center justify-center rounded-lg transition text-slate-300 hover:text-slate-500 hover:bg-slate-100 disabled:hover:bg-transparent disabled:text-slate-300 cursor-not-allowed"
+            title={canUndo ? "Undo (Ctrl+Z)" : "Undo"}
+            className="h-8.5 w-8.5 2xl:h-10 2xl:w-10 flex items-center justify-center rounded-lg transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 disabled:hover:bg-transparent disabled:text-slate-300 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
           >
             <Undo2 className="w-4 h-4 2xl:w-5 2xl:h-5" />
           </button>
           <button
             type="button"
-            disabled={true}
-            suppressHydrationWarning
+            disabled={!canRedo}
+            onClick={redo}
             aria-label="Redo"
-            className="h-8.5 w-8.5 2xl:h-10 2xl:w-10 flex items-center justify-center rounded-lg transition text-slate-300 hover:text-slate-500 hover:bg-slate-100 disabled:hover:bg-transparent disabled:text-slate-300 cursor-not-allowed"
+            title={canRedo ? "Redo (Ctrl+Y / Ctrl+Shift+Z)" : "Redo"}
+            className="h-8.5 w-8.5 2xl:h-10 2xl:w-10 flex items-center justify-center rounded-lg transition text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 disabled:hover:bg-transparent disabled:text-slate-300 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-2xs"
           >
             <Redo2 className="w-4 h-4 2xl:w-5 2xl:h-5" />
           </button>

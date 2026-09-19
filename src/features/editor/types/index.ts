@@ -246,6 +246,12 @@ export const AVAILABLE_FONTS = [
   "Courier New",
 ] as const;
 
+export interface HistorySnapshot {
+  pages: CanvasPage[];
+  metadata: DocumentMetadata;
+  paperSize: PaperSize;
+}
+
 export interface EditorStoreState {
   activeTemplateId: string;
   selectedBlockId: string | null;
@@ -261,6 +267,12 @@ export interface EditorStoreState {
   isFullscreen: boolean;
   lastSavedAt: string | null;
   saveMessage: string | null;
+
+  // History (Undo / Redo)
+  past: HistorySnapshot[];
+  future: HistorySnapshot[];
+  undo: () => void;
+  redo: () => void;
 
   // Template management
   setActiveTemplateId: (id: string) => void;
@@ -424,8 +436,6 @@ export interface SortableTableRowProps {
   ) => React.CSSProperties;
   handleCellFocus: (rowId: number, colId: string) => void;
   updateTableRow: (
-    pageNumber: number,
-    blockId: string,
     rowId: number,
     field: string,
     value: string | number

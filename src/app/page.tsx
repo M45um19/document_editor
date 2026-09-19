@@ -128,7 +128,7 @@ export default function DocumentEditorPage() {
           position: "fixed",
           top: "0px",
           left: "0px",
-          width: `${PAPER_SIZES[paperSize]?.widthPx || 1056}px`,
+          width: `${PAPER_SIZES[paperSize]?.widthPx || 794}px`,
           zIndex: -9999,
           pointerEvents: "none",
           opacity: 1,

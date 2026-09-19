@@ -36,7 +36,7 @@ export const useTemplatesState = create<TemplatesStoreState>()(
             documentTitle: `VISUAL DOCUMENT ${nextCounter}`,
             documentNumber: `C-2026-06${nextCounter}`,
           },
-          paperSize: "tabloid",
+          paperSize: "a4",
           pages: JSON.parse(JSON.stringify(INITIAL_TEMPLATE_DATA.pages)),
         };
 

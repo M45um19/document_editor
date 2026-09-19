@@ -27,7 +27,7 @@ User clicks [ Download PDF ] in Header or Preview Modal
                        ▼
 ┌──────────────────────────────────────────────┐
 │ Generate multi-page jsPDF instance           │
-│ Match Tabloid / A4 / Letter / Legal format   │
+│ Match A4 / Tabloid / Letter / Legal format   │
 │ Append pages sequentially with zero chrome   │
 └──────────────────────┬───────────────────────┘
                        │
@@ -88,8 +88,8 @@ src/
 
 ### 5. Multi-Paper Format Dimensions & Multi-Page Pagination
 * Target physical document dimensions matching the active paper format:
-  * **Tabloid / Ledger:** `11 × 17 in` (`279.4 × 431.8 mm` / `792pt × 1224pt`) — Default
-  * **A4:** `210 × 297 mm` (`595.28pt × 841.89pt`)
+  * **A4:** `210 × 297 mm` (`595.28pt × 841.89pt`) — Default Standard
+  * **Tabloid / Ledger:** `11 × 17 in` (`279.4 × 431.8 mm` / `792pt × 1224pt`)
   * **Letter (US):** `8.5 × 11 in` (`215.9 × 279.4 mm` / `612pt × 792pt`)
   * **Legal (US):** `8.5 × 14 in` (`215.9 × 355.6 mm` / `612pt × 1008pt`)
 * When a document contains multiple pages:
