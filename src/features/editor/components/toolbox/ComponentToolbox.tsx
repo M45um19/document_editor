@@ -10,13 +10,8 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useEditorState } from "../hooks/useEditorState";
-import { ToolType } from "../types";
-
-interface ComponentToolboxProps {
-  onClose?: () => void;
-  className?: string;
-}
+import { useEditorState } from "../../hooks/useEditorState";
+import { ToolType, ComponentToolboxProps } from "../../types";
 
 export function ComponentToolbox({ onClose, className = "" }: ComponentToolboxProps) {
   const activeTool = useEditorState((s) => s.activeTool);

@@ -12,10 +12,11 @@ import {
 import { useNavbar } from "@/hooks/useNavbar";
 import { useEditorState } from "@/features/editor/hooks/useEditorState";
 import { PAPER_SIZES } from "@/features/editor/types";
-import { CleanDocumentSheet } from "./CleanDocumentSheet";
+import { CleanDocumentSheet } from "../sheet/CleanDocumentSheet";
 import { exportDocumentToPdf } from "@/features/export/services/pdfExportService";
+import { PreviewMode, DocumentPreviewModalProps } from "../../types";
 
-export function DocumentPreviewModal() {
+export function DocumentPreviewModal({ className = "" }: DocumentPreviewModalProps = {}) {
   const isPreviewOpen = useNavbar((s) => s.isPreviewOpen);
   const closePreview = useNavbar((s) => s.closePreview);
 
@@ -23,7 +24,7 @@ export function DocumentPreviewModal() {
   const metadata = useEditorState((s) => s.metadata);
   const paperSize = useEditorState((s) => s.paperSize);
 
-  const [previewMode, setPreviewMode] = useState<"continuous" | "single">("continuous");
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("continuous");
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -57,7 +58,7 @@ export function DocumentPreviewModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col overflow-hidden animate-in fade-in duration-200">
+    <div className={`fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col overflow-hidden animate-in fade-in duration-200 ${className}`}>
       {/* Top Floating Control Bar */}
       <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between z-30 shrink-0 shadow-sm">
         <div className="flex items-center gap-3">
@@ -132,7 +133,6 @@ export function DocumentPreviewModal() {
               </button>
             </div>
           )}
-
 
           {/* Download PDF */}
           <button

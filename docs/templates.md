@@ -13,11 +13,17 @@ src/
 │   └── TabBar.tsx                     # Multi-template tab strip (Pure presentational)
 └── features/templates/
     ├── components/
-    │   └── SavedTemplatesPanel.tsx    # Bottom panel displaying all saved templates
+    │   ├── panel/
+    │   │   └── SavedTemplatesPanel.tsx    # Bottom panel orchestrator for saved templates
+    │   ├── cards/
+    │   │   └── TemplateCard.tsx           # Individual template card item with status & actions
+    │   └── index.ts                   # Central barrel export for templates components
     ├── hooks/
-    │   └── useTemplatesState.ts       # Central store for template list & per-template storage
+    │   └── useTemplatesState.ts       # Central Zustand store for template lifecycle & active tab sync
+    ├── utils/
+    │   └── templateUtils.ts           # Pure initial data constants and LocalStorage persistence helpers
     └── types/
-        └── index.ts                   # Types for template items and storage contracts
+        └── index.ts                   # Centralized domain types, template contracts, and component props
 ```
 
 ---
@@ -39,14 +45,14 @@ Positioned immediately below the main application header (`bg-[#eef2f7]`):
 
 ---
 
-### 2. Saved Templates Panel (`src/features/templates/components/SavedTemplatesPanel.tsx`)
+### 2. Saved Templates Panel (`src/features/templates/components/panel/SavedTemplatesPanel.tsx`)
 Full-width container positioned at the bottom of the scrollable workspace:
 
 * **Header Section:**
   * **Icon & Title:** Folder icon (`Folder`) inside a blue rounded box + `"Saved Templates"` heading.
   * **Subtitle:** Displays total templates count and creation hint.
   * **Save CTA:** `[Save as Current Template]` button styled with clean outlined styling (`border border-blue-500 text-blue-600 bg-white hover:bg-blue-50/70`, `py-2 sm:py-2.5 px-3.5 sm:px-4`, and `<Save />` icon). Clicking this saves the active document state (metadata, pages, and paper format) to its dedicated storage slot.
-* **Template Card Items:**
+* **Template Card Items (`src/features/templates/components/cards/TemplateCard.tsx`):**
   * **Document Icon & Details:** Blue square badge with `FileText`, template title, active badge indicator, and formatted timestamp (`Saved on YYYY-MM-DD | HH:MM AM/PM`).
   * **Actions:**
     * `[ Open / Current ]` Button: Loads the template's independent data into the editor canvas and scrolls smoothly to the canvas.

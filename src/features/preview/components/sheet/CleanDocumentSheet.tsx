@@ -1,12 +1,8 @@
 "use client";
 
 import React from "react";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
 import {
-  CanvasPage,
-  DocumentMetadata,
-  PaperSize,
-  PAPER_SIZES,
   CanvasBlock,
   TableBlock,
   TextBlock,
@@ -14,18 +10,10 @@ import {
   ShapeBlock,
   DEFAULT_TABLE_COLUMNS,
   FONT_FAMILY_MAP,
+  PAPER_SIZES,
 } from "@/features/editor/types";
-import { getPageLayoutRows } from "@/features/editor/hooks/useEditorState";
-
-interface CleanDocumentSheetProps {
-  page: CanvasPage;
-  pageIndex: number;
-  totalPages: number;
-  metadata: DocumentMetadata;
-  paperSize: PaperSize;
-  id?: string;
-  className?: string;
-}
+import { getPageLayoutRows } from "@/features/editor/utils/paginationUtils";
+import { CleanDocumentSheetProps } from "../../types";
 
 export function CleanDocumentSheet({
   page,
@@ -51,35 +39,74 @@ export function CleanDocumentSheet({
             : DEFAULT_TABLE_COLUMNS;
         const borderStyle = tableBlock.borderStyle || "1px solid #E5E7EB";
         const cellPadding = tableBlock.padding !== undefined ? tableBlock.padding : 8;
-        const hasRowSpacing = !!tableBlock.rowSpacing && tableBlock.rowSpacing > 0;
+        const rowSpacing = tableBlock.rowSpacing !== undefined ? tableBlock.rowSpacing : 0;
+        const hasRowSpacing = rowSpacing > 0;
         const isNoBorder = borderStyle === "none";
 
+        const rawWidth = tableBlock.tableWidth ?? "100%";
+        let formattedTableWidth = "100%";
+        if (typeof rawWidth === "number") {
+          formattedTableWidth = `${rawWidth}%`;
+        } else if (typeof rawWidth === "string") {
+          const trimmed = rawWidth.trim();
+          if (!trimmed) {
+            formattedTableWidth = "100%";
+          } else if (
+            trimmed.endsWith("%") ||
+            trimmed.endsWith("px") ||
+            trimmed.endsWith("rem") ||
+            trimmed.endsWith("em") ||
+            trimmed.endsWith("vw")
+          ) {
+            formattedTableWidth = trimmed;
+          } else {
+            const num = Number(trimmed);
+            if (!isNaN(num)) {
+              formattedTableWidth = num <= 100 ? `${num}%` : `${num}px`;
+            } else {
+              formattedTableWidth = trimmed;
+            }
+          }
+        }
+
+        const tableAlign = tableBlock.align || "left";
+        const alignStyle =
+          tableAlign === "center"
+            ? "justify-center"
+            : tableAlign === "right"
+            ? "justify-end"
+            : "justify-start";
+
         return (
-          <div key={tableBlock.id} className="w-full my-2">
+          <div key={tableBlock.id} className="w-full space-y-2 p-1 sm:p-2">
             {tableBlock.title && (
-              <div className="flex items-center gap-2 mb-2">
-                <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-bold text-slate-900 tracking-tight">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+                  <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </div>
+                <span className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight">
                   {tableBlock.title}
                 </span>
               </div>
             )}
-            <div className="w-full overflow-x-auto rounded-lg">
+            <div className={`w-full overflow-x-auto rounded-lg flex ${alignStyle}`}>
               <table
                 style={{
                   fontFamily: FONT_FAMILY_MAP[fontFamily] || "var(--font-inter), Inter, sans-serif",
                   fontSize,
                   color,
                   borderCollapse: hasRowSpacing ? "separate" : "collapse",
-                  borderSpacing: hasRowSpacing ? `0 ${tableBlock.rowSpacing}px` : undefined,
-                  width: tableBlock.tableWidth ?? "100%",
+                  borderSpacing: hasRowSpacing ? `0 ${rowSpacing}px` : undefined,
+                  width: formattedTableWidth,
+                  maxWidth: "100%",
                 }}
                 className="w-full text-left"
               >
                 <thead>
                   <tr
                     style={{
-                      borderBottom: borderStyle,
+                      borderBottom: isNoBorder ? "none" : borderStyle,
+                      borderTop: isNoBorder ? "none" : borderStyle,
                       backgroundColor: "#f8fafc",
                     }}
                     className="text-xs uppercase font-semibold text-slate-600 tracking-wider"
@@ -94,6 +121,7 @@ export function CleanDocumentSheet({
                           paddingBottom: `${cellPadding}px`,
                           paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
                           paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
+                          borderBottom: isNoBorder ? "none" : borderStyle,
                         }}
                       >
                         {col.label}
@@ -229,7 +257,7 @@ export function CleanDocumentSheet({
               textAlign,
               lineHeight: 1.25,
             }}
-            className="whitespace-pre-wrap my-1 leading-snug"
+            className="whitespace-pre-wrap leading-snug p-0"
           >
             {textBlock.content || "\u00A0"}
           </div>
@@ -252,7 +280,7 @@ export function CleanDocumentSheet({
             : "flex justify-start items-center";
 
         return (
-          <div key={imageBlock.id} className={`w-full my-1.5 ${alignClass}`}>
+          <div key={imageBlock.id} className={`w-full p-0 bg-transparent ${alignClass}`}>
             {imageBlock.url ? (
               <img
                 src={imageBlock.url}
@@ -297,7 +325,7 @@ export function CleanDocumentSheet({
         const dividerWidth = shapeBlock.width || "100%";
 
         return (
-          <div key={shapeBlock.id} className="w-full my-2">
+          <div key={shapeBlock.id} className="w-full py-1 px-0 bg-transparent">
             <div
               style={{
                 height: dividerHeight,
@@ -326,23 +354,6 @@ export function CleanDocumentSheet({
       className={`clean-document-sheet bg-white p-6 sm:p-8 md:p-12 flex flex-col justify-between transition-all print:shadow-none print:border-none print:m-0 print:p-8 ${className}`}
     >
       <div className="space-y-4 sm:space-y-6 w-full flex-1">
-        {/* Subsequent Page Compact Header */}
-        {page.pageNumber > 1 && (
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">
-                {page.pageNumber}
-              </div>
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                {metadata.companyName || "Document"} — Continuation Sheet
-              </span>
-            </div>
-            <span className="text-xs font-medium text-slate-400">
-              Ref: {metadata.documentNumber || `Page ${page.pageNumber}`}
-            </span>
-          </div>
-        )}
-
         {/* Page Grid Rows Container */}
         <div className="flex flex-col w-full">
           {getPageLayoutRows(page).map((row) => {
@@ -357,7 +368,7 @@ export function CleanDocumentSheet({
                   marginTop: `${marginTop}px`,
                   marginBottom: `${marginBottom}px`,
                 }}
-                className="w-full"
+                className="w-full py-0"
               >
                 <div className="flex items-stretch w-full">
                   {row.columns.map((col) => {
@@ -371,7 +382,7 @@ export function CleanDocumentSheet({
                           width: `${widthPercent}%`,
                           flex: `0 0 ${widthPercent}%`,
                         }}
-                        className="px-1 sm:px-2 first:pl-0 last:pr-0"
+                        className="flex flex-col gap-0.5 min-w-0 relative shrink-0 px-1 sm:px-1.5"
                       >
                         {col.blocks.map((b) => renderBlock(b))}
                       </div>
@@ -384,12 +395,18 @@ export function CleanDocumentSheet({
         </div>
       </div>
 
-      {/* Sheet Footer */}
-      <div className="pt-6 mt-auto border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-        <span>{metadata.companyName || "Document"}</span>
-        <span>
+      {/* Canvas Footer */}
+      <div className="pt-6 sm:pt-8 flex items-center sm:items-end justify-between gap-3 sm:gap-0 border-t border-slate-100 mt-auto">
+        <p className="text-[11px] sm:text-xs text-slate-400 text-center sm:text-left">
           Page {page.pageNumber} of {totalPages}
-        </span>
+        </p>
+
+        {/* 3-Bar Geometric Graphic */}
+        <div className="flex items-end gap-1">
+          <div className="w-2.5 sm:w-3 h-3 sm:h-3.5 bg-sky-200 -skew-x-12 rounded-xs" />
+          <div className="w-2.5 sm:w-3 h-5 sm:h-6 bg-sky-400 -skew-x-12 rounded-xs" />
+          <div className="w-2.5 sm:w-3 h-7 sm:h-9 bg-blue-600 -skew-x-12 rounded-xs" />
+        </div>
       </div>
     </div>
   );
