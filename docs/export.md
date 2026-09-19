@@ -48,11 +48,21 @@ src/
 │   └── Header.tsx                       # Contains the [ Download PDF ] action button
 ├── features/preview/
 │   ├── components/
-│   │   ├── CleanDocumentSheet.tsx       # Pristine multi-page sheet renderer with 100% canvas visual parity
-│   │   └── DocumentPreviewModal.tsx     # Full document preview modal (All Pages / Single Page views)
+│   │   ├── sheet/
+│   │   │   └── CleanDocumentSheet.tsx   # Pristine multi-page sheet renderer with 100% canvas visual parity
+│   │   ├── modal/
+│   │   │   └── DocumentPreviewModal.tsx # Full document preview modal (All Pages / Single Page views)
+│   │   └── index.ts                     # Barrel export for preview components
+│   └── types/
+│       └── index.ts                     # CleanDocumentSheetProps, PreviewMode, DocumentPreviewModalProps
 └── features/export/
-    └── services/
-        └── pdfExportService.ts          # Core multi-page html2canvas-pro capture & jsPDF compiler
+    ├── services/
+    │   └── pdfExportService.ts          # Core multi-page html2canvas-pro capture & jsPDF compiler
+    ├── utils/
+    │   └── exportUtils.ts               # PAPER_FORMAT_MAP and file name sanitization helpers
+    ├── types/
+    │   └── index.ts                     # ExportPdfOptions, PaperFormatConfig
+    └── index.ts                         # Feature-level barrel export for PDF export functions
 ```
 
 ---
@@ -85,6 +95,7 @@ src/
 * When a document contains multiple pages:
   * Iterates across all document page containers sequentially (`Page 1`, `Page 2`...).
   * Captures each page at 2x High-DPI scale.
+  * **Sheet Isolation in `onclone`:** Automatically hides sibling sheets (`display: none`) in the cloned document so every page (including the final page) is captured from `(0, 0)` with zero vertical offset, zero scroll displacement, and full standard page dimensions.
   * Appends pages sequentially using `pdf.addPage()`.
 
 ### 6. File Naming Convention
@@ -99,6 +110,8 @@ src/
 
 ## Edge Cases & Reliability Checklist
 
-1. **Mozilla Firefox Compatibility:** Offscreen elements use valid coordinate bounds (`top: 0, left: 0, zIndex: -9999`) and `scrollX: 0, scrollY: 0` to prevent viewport offsets and rendering exceptions.
-2. **Tailwind v4 Color Space:** Fully supported via `html2canvas-pro` for all palettes and shadow layers.
-3. **Download Feedback:** While `isExporting` is active, displays a spinning loader on the `[ Download PDF ]` button and temporarily disables clicks to prevent duplicate downloads.
+1. **Multi-Page Sheet Isolation:** Sibling sheets inside offscreen containers are hidden during per-page rasterization, eliminating multi-page coordinate stacking and scroll clipping bugs.
+2. **Full Physical Page Preservation:** All pages (including partially filled final pages) maintain their full standard paper dimensions (`minHeight: paperConfig.minHeightPx`), ensuring complete page structure with the footer anchored at the bottom.
+3. **Mozilla Firefox Compatibility:** Offscreen elements use valid coordinate bounds (`top: 0, left: 0, zIndex: -9999`) and `scrollX: 0, scrollY: 0` to prevent viewport offsets and rendering exceptions.
+4. **Tailwind v4 Color Space:** Fully supported via `html2canvas-pro` for all palettes and shadow layers.
+5. **Download Feedback:** While `isExporting` is active, displays a spinning loader on the `[ Download PDF ]` button and temporarily disables clicks to prevent duplicate downloads.

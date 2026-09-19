@@ -14,13 +14,34 @@ src/
 │   └── TabBar.tsx                 # Multi-template tab switcher (Pure presentational)
 └── features/editor/
     ├── components/
-    │   ├── ComponentToolbox.tsx   # Left dark sidebar (Tools, Quick Add, Page Thumbnails)
-    │   ├── EditorCanvas.tsx       # Center white sheet on slate canvas with A4 auto-pagination, margin & col resizers
-    │   └── PropertiesPanel.tsx    # Right properties sidebar (Typography, Image/Logo, Divider, Table & Page Grid)
+    │   ├── blocks/
+    │   │   ├── CanvasTextBlock.tsx        # Editable typography text block renderer
+    │   │   ├── CanvasTableBlock.tsx       # Table block renderer with headers, action bar, and rows
+    │   │   ├── CanvasImageBlock.tsx       # Image / logo block renderer with upload & alignment
+    │   │   ├── CanvasShapeBlock.tsx       # Shape divider accent line renderer
+    │   │   └── SortableTableRow.tsx       # Draggable sortable table row component
+    │   ├── canvas/
+    │   │   ├── EditorCanvas.tsx           # Center canvas orchestrator with zoom & DndContext
+    │   │   ├── CanvasPageSheet.tsx        # Single document paper sheet renderer with grid rows & margins
+    │   │   └── RowMarginHandle.tsx        # Interactive top/bottom row margin resize handle
+    │   ├── properties/
+    │   │   ├── PropertiesPanel.tsx        # Right properties sidebar orchestrator
+    │   │   ├── TextPropertiesSection.tsx  # Typography styling controls (fonts, sizes, weights, colors)
+    │   │   ├── TablePropertiesSection.tsx # Table formatting controls (borders, padding, row spacing)
+    │   │   ├── ImagePropertiesSection.tsx # Image sizing, source, and alignment controls
+    │   │   ├── ShapePropertiesSection.tsx # Divider color and thickness controls
+    │   │   └── MetadataPropertiesSection.tsx # Document title, company, date, and invoice metadata
+    │   ├── toolbox/
+    │   │   └── ComponentToolbox.tsx       # Left dark sidebar (Tools, Quick Add, Page Thumbnails)
+    │   ├── common/
+    │   │   └── AutoExpandingTextarea.tsx  # Dynamic auto-height textarea primitive
+    │   └── index.ts                       # Central barrel export for editor components
     ├── hooks/
-    │   └── useEditorState.ts      # Central Zustand store for editor domain state, column widths & auto-persistence
+    │   └── useEditorState.ts          # Central Zustand store for editor domain state & actions
+    ├── utils/
+    │   └── paginationUtils.ts         # Pure pagination reflow math, block weight, and capacity engines
     └── types/
-        └── index.ts               # Domain types for blocks, tables, pages, metadata, column widths, and styling
+        └── index.ts                   # Centralized domain types, block models, and component props
 ```
 
 ---
@@ -41,7 +62,7 @@ Located at the top of the viewport (`h-14 sm:h-16 2xl:h-20`, white background, b
 
 ---
 
-### 2. Component Toolbox (`src/features/editor/components/ComponentToolbox.tsx`)
+### 2. Component Toolbox (`src/features/editor/components/toolbox/ComponentToolbox.tsx`)
 Fixed left sidebar (`bg-[#081225]` dark theme, `w-52` to `w-80` responsive width, full vertical height). On mobile, rendered inside a backdrop slide-out drawer.
 
 * **Components Section:**
@@ -60,7 +81,7 @@ Fixed left sidebar (`bg-[#081225]` dark theme, `w-52` to `w-80` responsive width
 
 ---
 
-### 3. Visual Canvas (`src/features/editor/components/EditorCanvas.tsx`)
+### 3. Visual Canvas (`src/features/editor/components/canvas/EditorCanvas.tsx`)
 Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR hydration protection.
 
 * **Viewport Top Controls:**
@@ -109,7 +130,7 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
 
 ---
 
-### 4. Properties & Data Panel (`src/features/editor/components/PropertiesPanel.tsx`)
+### 4. Properties & Data Panel (`src/features/editor/components/properties/PropertiesPanel.tsx`)
 Right sidebar (`w-full xl:w-80 2xl:w-[380px] 3xl:w-[440px]`, white background, bordered left).
 
 * **Typography Settings:**

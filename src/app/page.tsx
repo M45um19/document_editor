@@ -3,12 +3,16 @@
 import React, { useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { TabBar } from "@/components/layout/TabBar";
-import { ComponentToolbox } from "@/features/editor/components/ComponentToolbox";
-import { EditorCanvas } from "@/features/editor/components/EditorCanvas";
-import { PropertiesPanel } from "@/features/editor/components/PropertiesPanel";
-import { SavedTemplatesPanel } from "@/features/templates/components/SavedTemplatesPanel";
-import { DocumentPreviewModal } from "@/features/preview/components/DocumentPreviewModal";
-import { CleanDocumentSheet } from "@/features/preview/components/CleanDocumentSheet";
+import {
+  ComponentToolbox,
+  EditorCanvas,
+  PropertiesPanel,
+} from "@/features/editor/components";
+import { SavedTemplatesPanel } from "@/features/templates/components";
+import {
+  DocumentPreviewModal,
+  CleanDocumentSheet,
+} from "@/features/preview/components";
 import { useNavbar } from "@/hooks/useNavbar";
 import { useMounted } from "@/hooks/useMounted";
 import { useEditorState } from "@/features/editor/hooks/useEditorState";

@@ -36,16 +36,23 @@ src/
 ├── components/           # GLOBAL PURE UI (Shared presentation primitives: Header.tsx, TabBar.tsx)
 ├── features/             # THE CORE DOMAIN (Business boundaries isolated cleanly by feature)
 │   ├── editor/           # Canvas, drag-and-drop, row margins, column resizing, and property controls
-│   │   ├── components/   # ComponentToolbox.tsx, EditorCanvas.tsx, PropertiesPanel.tsx
-│   │   ├── hooks/        # useEditorState.ts (Pagination, reflowPages, row margins, column widths)
-│   │   └── types/        # Domain types (CanvasBlock, PageGridRow, PaperSize, FONT_FAMILY_MAP)
+│   │   ├── components/   # blocks/, canvas/, properties/, toolbox/, common/, index.ts
+│   │   ├── hooks/        # useEditorState.ts (Zustand state store & action triggers)
+│   │   ├── utils/        # paginationUtils.ts (Pure reflow math, row height, table splitting)
+│   │   └── types/        # Domain types (CanvasBlock, PageGridRow, PaperSize, FONT_FAMILY_MAP, component props)
 │   ├── templates/        # Template management, persistence, tab bar synchronization, and cards
-│   │   ├── components/   # SavedTemplatesPanel.tsx (Template cards, timestamp tracking, save CTA)
-│   │   └── hooks/        # useTemplatesState.ts (LocalStorage slots, active tab sync, auto-migration)
+│   │   ├── components/   # panel/SavedTemplatesPanel.tsx, cards/TemplateCard.tsx, index.ts
+│   │   ├── hooks/        # useTemplatesState.ts (LocalStorage slots, active tab sync)
+│   │   ├── utils/        # templateUtils.ts (Initial data, storage helpers, auto-migration)
+│   │   └── types/        # SavedTemplateItem, TemplatesStoreState, TemplateCardProps
 │   ├── preview/          # High-fidelity document preview and clean presentation
-│   │   └── components/   # CleanDocumentSheet.tsx (Pristine renderer), DocumentPreviewModal.tsx
+│   │   ├── components/   # sheet/CleanDocumentSheet.tsx, modal/DocumentPreviewModal.tsx, index.ts
+│   │   └── types/        # CleanDocumentSheetProps, PreviewMode, DocumentPreviewModalProps
 │   └── export/           # High-DPI PDF generation and direct download pipeline
-│       └── services/     # pdfExportService.ts (html2canvas-pro + jsPDF multi-page compiler)
+│       ├── services/     # pdfExportService.ts (html2canvas-pro + jsPDF multi-page compiler)
+│       ├── utils/        # exportUtils.ts (PAPER_FORMAT_MAP, file name sanitization)
+│       ├── types/        # ExportPdfOptions, PaperFormatConfig
+│       └── index.ts      # Feature barrel export
 ├── hooks/                # GLOBAL UI HOOKS (useNavbar.ts for drawers/modals, useMounted.ts for SSR safety)
 └── types/                # Core shared TypeScript interfaces and paper configuration schemas
 
@@ -64,12 +71,16 @@ docs/                     # DOCUMENTATION HUB (Detailed guides for Developers & 
 The core document authoring and interactive layout workspace.
 
 * **Components (`components/`):**
-  * `EditorCanvas.tsx`: The central document canvas. Implements bi-directional pagination across multi-page sheets, `@dnd-kit` table row drag-and-drop reordering, draggable column border width resizing, canvas-driven ↕ top/bottom row margin handles (`0px` to `300px`), paper size switching, and zoom controls.
-  * `ComponentToolbox.tsx`: Dark-themed left sidebar providing component insertion tools (Text Blocks, Data Tables, Image Blocks, Geometric Divider Shapes), quick-add buttons, and sequential page thumbnail navigation.
-  * `PropertiesPanel.tsx`: Right sidebar for real-time styling: Google Fonts picker, font sizes, weights, colors, text alignment, table borders, cell paddings, row spacings, cell-level overrides, image upload/logo settings, and dynamic grid row/column controls.
+  * `blocks/`: `CanvasTextBlock.tsx`, `CanvasTableBlock.tsx`, `CanvasImageBlock.tsx`, `CanvasShapeBlock.tsx`, `SortableTableRow.tsx`
+  * `canvas/`: `EditorCanvas.tsx`, `CanvasPageSheet.tsx`, `RowMarginHandle.tsx`
+  * `properties/`: `PropertiesPanel.tsx`, `TextPropertiesSection.tsx`, `TablePropertiesSection.tsx`, `ImagePropertiesSection.tsx`, `ShapePropertiesSection.tsx`, `MetadataPropertiesSection.tsx`
+  * `toolbox/`: `ComponentToolbox.tsx`
+  * `common/`: `AutoExpandingTextarea.tsx`
+  * `index.ts`: Central barrel export for all editor components
 * **State Management (`hooks/useEditorState.ts`):**
-  * Central Zustand store managing canvas pages, grid rows, blocks, paper sizes, active selection, and auto-saving.
-  * Houses the **Bi-directional Pagination & Reflow Engine (`reflowPages`)**, which calculates physical paper height capacities and splits overflowing tables into continuation sheets across pages.
+  * Central reactive Zustand store coordinating canvas modifications, active selections, and template loading.
+* **Pure Utilities (`utils/paginationUtils.ts`):**
+  * Pure calculation engine for bi-directional auto-pagination (`reflowPages`), table row splitting across pages, capacity calculation, and block heights.
 * **Domain Types (`types/index.ts`):**
   * Defines interfaces for `CanvasBlock`, `TableBlock`, `TextBlock`, `ImageBlock`, `ShapeBlock`, `PageGridRow`, `PageGridColumn`, `PaperSize`, `PAPER_SIZES`, `FONT_FAMILY_MAP`, and `DEFAULT_TABLE_COLUMNS`.
 
@@ -79,12 +90,16 @@ The core document authoring and interactive layout workspace.
 Handles template lifecycle, tab bar synchronization, and persistent storage.
 
 * **Components (`components/`):**
-  * `SavedTemplatesPanel.tsx`: Bottom workspace panel displaying saved template cards with live metadata, active status badges, formatted save timestamps, "Open / Current" switch actions, delete actions, and "Save as Current Template" button.
+  * `panel/SavedTemplatesPanel.tsx`: Bottom workspace panel orchestrator displaying template library.
+  * `cards/TemplateCard.tsx`: Individual template card with status badges, formatted timestamps, and actions.
+  * `index.ts`: Central barrel export for templates components.
 * **State Management (`hooks/useTemplatesState.ts`):**
   * Manages active template IDs and tab synchronization.
   * Enforces **Per-Template Storage Isolation**: Each template saves to its own distinct `localStorage` slot (`doc_template_data_${templateId}`), preventing data collision.
-  * Automatically applies default **Tabloid / Ledger** paper format to newly created templates.
-  * Auto-migrates legacy template snapshots to the modern grid row header structure.
+* **Pure Utilities (`utils/templateUtils.ts`):**
+  * `INITIAL_TEMPLATE_DATA`, `DEFAULT_TEMPLATES_LIST`, date formatting, and LocalStorage migration helpers.
+* **Domain Types (`types/index.ts`):**
+  * Defines `SavedTemplateItem`, `TemplatesStoreState`, `TemplateCardProps`, and `SavedTemplatesPanelProps`.
 
 ---
 
@@ -92,8 +107,11 @@ Handles template lifecycle, tab bar synchronization, and persistent storage.
 Provides a clean, print-accurate representation of the document.
 
 * **Components (`components/`):**
-  * `CleanDocumentSheet.tsx`: Renders the document sheet in a pristine state—identical to the canvas in typography, custom cell styles, SVG logos, and divider gradients, but with **zero editor UI chrome** (no drag handles, margin resize pills, cell outlines, or delete buttons).
-  * `DocumentPreviewModal.tsx`: Full-screen modal overlay offering **All Pages** (continuous scroll) and **Single Page** (with page switcher) view modes and direct PDF download action.
+  * `sheet/CleanDocumentSheet.tsx`: Renders the document sheet in a pristine state—identical to the canvas in typography, custom cell styles, SVG logos, and divider gradients, but with **zero editor UI chrome** (no drag handles, margin resize pills, cell outlines, or delete buttons).
+  * `modal/DocumentPreviewModal.tsx`: Full-screen modal overlay offering **All Pages** (continuous scroll) and **Single Page** (with page switcher) view modes and direct PDF download action.
+  * `index.ts`: Central barrel export for preview components.
+* **Domain Types (`types/index.ts`):**
+  * Defines `CleanDocumentSheetProps`, `PreviewMode`, and `DocumentPreviewModalProps`.
 
 ---
 
@@ -105,6 +123,12 @@ Generates high-resolution multi-page PDF files entirely on the client side.
   * Copies root font CSS variables (`--font-inter`, `--font-roboto`, `--font-outfit`, `--font-playfair`, etc.) to the export engine to preserve custom typography.
   * Compiles multi-page PDF documents matching the exact paper dimensions (Tabloid, A4, Letter, Legal) with `jsPDF`.
   * Triggers an automatic direct `.pdf` file download without opening browser print dialogs or modals.
+* **Pure Utilities (`utils/exportUtils.ts`):**
+  * `PAPER_FORMAT_MAP` and filename sanitization logic.
+* **Domain Types (`types/index.ts`):**
+  * Defines `ExportPdfOptions` and `PaperFormatConfig`.
+* **Barrel Export (`index.ts`):**
+  * Direct exports for PDF compilation functions and types.
 
 ---
 
