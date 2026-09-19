@@ -1,37 +1,9 @@
 import html2canvas from "html2canvas-pro";
 import jsPDF from "jspdf";
-import { CanvasPage, DocumentMetadata, PaperSize, PAPER_SIZES } from "@/features/editor/types";
+import { PAPER_SIZES } from "@/features/editor/types";
 import { useEditorState } from "@/features/editor/hooks/useEditorState";
-
-export interface ExportPdfOptions {
-  fileName?: string;
-  paperSize?: PaperSize;
-  pages?: CanvasPage[];
-  metadata?: DocumentMetadata;
-  elementId?: string;
-}
-
-const PAPER_FORMAT_MAP: Record<
-  PaperSize,
-  { format: string | [number, number]; orientation: "portrait" | "landscape" }
-> = {
-  tabloid: {
-    format: [279.4, 431.8], // 11 x 17 inches in mm
-    orientation: "portrait",
-  },
-  a4: {
-    format: "a4",
-    orientation: "portrait",
-  },
-  letter: {
-    format: "letter",
-    orientation: "portrait",
-  },
-  legal: {
-    format: "legal",
-    orientation: "portrait",
-  },
-};
+import { ExportPdfOptions } from "../types";
+import { PAPER_FORMAT_MAP, sanitizePdfFileName } from "../utils/exportUtils";
 
 export async function exportDocumentToPdf(options: ExportPdfOptions = {}): Promise<void> {
   if (typeof window === "undefined") return;
@@ -39,11 +11,11 @@ export async function exportDocumentToPdf(options: ExportPdfOptions = {}): Promi
   const state = useEditorState.getState();
   const currentPaperSize = options.paperSize || state.paperSize || "tabloid";
   const docMetadata = options.metadata || state.metadata;
-  const docPages = options.pages || state.pages;
   const rawFileName =
     options.fileName || docMetadata.documentTitle || "Document_Project";
 
   const paperConfig = PAPER_FORMAT_MAP[currentPaperSize] || PAPER_FORMAT_MAP.tabloid;
+  const paperDimConfig = PAPER_SIZES[currentPaperSize] || PAPER_SIZES.tabloid;
 
   // 1. Locate all clean document sheets in DOM (prefer offscreen export root)
   const exportRoot = document.getElementById("clean-export-root");
@@ -103,8 +75,7 @@ export async function exportDocumentToPdf(options: ExportPdfOptions = {}): Promi
         backgroundColor: "#ffffff",
         scrollX: 0,
         scrollY: 0,
-        windowWidth: sheet.scrollWidth || sheet.offsetWidth,
-        windowHeight: sheet.scrollHeight || sheet.offsetHeight,
+        windowWidth: paperDimConfig.widthPx,
         onclone: (clonedDoc, clonedElement) => {
           if (document.documentElement) {
             clonedDoc.documentElement.className = document.documentElement.className;
@@ -112,10 +83,36 @@ export async function exportDocumentToPdf(options: ExportPdfOptions = {}): Promi
           if (document.body) {
             clonedDoc.body.className = document.body.className;
           }
-          clonedElement.style.position = "static";
+
+          // Isolate this specific sheet in the clone: hide all sibling sheets
+          const allClonedSheets = Array.from(
+            clonedDoc.querySelectorAll<HTMLElement>(".clean-document-sheet")
+          );
+          allClonedSheets.forEach((s) => {
+            if (s !== clonedElement) {
+              s.style.display = "none";
+            }
+          });
+
+          if (clonedElement.parentElement) {
+            clonedElement.parentElement.style.position = "static";
+            clonedElement.parentElement.style.top = "0";
+            clonedElement.parentElement.style.left = "0";
+            clonedElement.parentElement.style.margin = "0";
+            clonedElement.parentElement.style.padding = "0";
+            clonedElement.parentElement.style.transform = "none";
+          }
+
+          clonedElement.style.display = "flex";
+          clonedElement.style.position = "relative";
           clonedElement.style.top = "0";
           clonedElement.style.left = "0";
           clonedElement.style.margin = "0";
+          clonedElement.style.width = `${paperDimConfig.widthPx}px`;
+          clonedElement.style.minWidth = `${paperDimConfig.widthPx}px`;
+          clonedElement.style.maxWidth = `${paperDimConfig.widthPx}px`;
+          clonedElement.style.minHeight = `${paperDimConfig.minHeightPx}px`;
+          clonedElement.style.height = `${paperDimConfig.minHeightPx}px`;
           clonedElement.style.boxShadow = "none";
           clonedElement.style.transform = "none";
           clonedElement.style.visibility = "visible";
@@ -132,7 +129,7 @@ export async function exportDocumentToPdf(options: ExportPdfOptions = {}): Promi
       pdf.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight);
     }
 
-    const sanitizedFileName = `${rawFileName.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+    const sanitizedFileName = sanitizePdfFileName(rawFileName);
     pdf.save(sanitizedFileName);
   } catch (err) {
     console.error("PDF generation failed:", err);

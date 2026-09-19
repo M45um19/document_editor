@@ -1,3 +1,5 @@
+import type React from "react";
+
 export interface BlockTypographyStyle {
   fontFamily?: string;
   fontSize?: number;
@@ -136,6 +138,7 @@ export interface PageGridRow {
   marginBottom?: number;
   paddingTop?: number;
   paddingBottom?: number;
+  pageBreakBefore?: boolean;
 }
 
 export interface CanvasPage {
@@ -172,8 +175,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.27 × 11.69 in",
     widthPx: 794,
     minHeightPx: 1123,
-    page1Capacity: 22.0,
-    pageNCapacity: 26.0,
+    page1Capacity: 980,
+    pageNCapacity: 960,
   },
   letter: {
     id: "letter",
@@ -184,8 +187,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.5 × 11 in",
     widthPx: 816,
     minHeightPx: 1056,
-    page1Capacity: 20.0,
-    pageNCapacity: 24.0,
+    page1Capacity: 920,
+    pageNCapacity: 900,
   },
   legal: {
     id: "legal",
@@ -196,8 +199,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.5 × 14 in",
     widthPx: 816,
     minHeightPx: 1344,
-    page1Capacity: 28.0,
-    pageNCapacity: 32.0,
+    page1Capacity: 1200,
+    pageNCapacity: 1180,
   },
   tabloid: {
     id: "tabloid",
@@ -208,8 +211,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "11 × 17 in",
     widthPx: 1056,
     minHeightPx: 1632,
-    page1Capacity: 36.0,
-    pageNCapacity: 42.0,
+    page1Capacity: 1490,
+    pageNCapacity: 1470,
   },
 };
 
@@ -242,4 +245,309 @@ export const AVAILABLE_FONTS = [
   "Georgia",
   "Courier New",
 ] as const;
+
+export interface EditorStoreState {
+  activeTemplateId: string;
+  selectedBlockId: string | null;
+  selectedCell: SelectedCellLocation | null;
+  selectedRowId: string | null;
+  selectedColumnId: string | null;
+  metadata: DocumentMetadata;
+  paperSize: PaperSize;
+  pages: CanvasPage[];
+  activePage: number;
+  activeTool: ToolType;
+  zoomLevel: string;
+  isFullscreen: boolean;
+  lastSavedAt: string | null;
+  saveMessage: string | null;
+
+  // Template management
+  setActiveTemplateId: (id: string) => void;
+  saveCurrentTemplate: (name?: string) => void;
+  loadTemplate: (snapshot: DocumentStateSnapshot, templateId?: string) => void;
+  resetToDefault: () => void;
+
+  // Viewport & Tools Actions
+  setSelectedBlockId: (id: string | null) => void;
+  setSelectedCell: (cell: SelectedCellLocation | null) => void;
+  setSelectedRowId: (rowId: string | null) => void;
+  setSelectedColumnId: (columnId: string | null) => void;
+  setActiveTool: (tool: ToolType) => void;
+  setZoomLevel: (zoom: string) => void;
+  setPaperSize: (paperSize: PaperSize) => void;
+  toggleFullscreen: () => void;
+  setActivePage: (pageNumber: number) => void;
+  addPage: () => void;
+  deletePage: (pageNumber: number) => void;
+
+  // Page Grid (Row & Column) Management
+  addPageRow: (pageNumber: number) => void;
+  deletePageRow: (pageNumber: number, rowId?: string) => void;
+  addPageColumn: (pageNumber: number, rowId?: string) => void;
+  deletePageColumn: (pageNumber: number, rowId?: string, columnId?: string) => void;
+  updateRowColumnWidths: (
+    pageNumber: number,
+    rowId: string,
+    columnWidths: { id: string; width: number }[]
+  ) => void;
+  updateRowMargins: (
+    pageNumber: number,
+    rowId: string,
+    margins: { marginTop?: number; marginBottom?: number }
+  ) => void;
+  updateRowPadding: (
+    pageNumber: number,
+    rowId: string,
+    padding: {
+      paddingTop?: number;
+      paddingBottom?: number;
+    }
+  ) => void;
+
+  // Component insertion with auto-pagination
+  addElement: (type: "text" | "table" | "image" | "shape") => void;
+  addElementToColumn: (
+    pageNumber: number,
+    rowId: string,
+    columnId: string,
+    type: "text" | "table" | "image" | "shape"
+  ) => void;
+  removeElement: (pageNumber: number, blockId: string) => void;
+
+  // Content updates
+  setMetadata: (updates: Partial<DocumentMetadata>) => void;
+  updateTextBlock: (pageNumber: number, blockId: string, content: string) => void;
+  updateBlockStyle: (
+    pageNumber: number,
+    blockId: string,
+    style: BlockUpdatePayload
+  ) => void;
+  updateImageBlock: (
+    pageNumber: number,
+    blockId: string,
+    updates: Partial<ImageBlock>
+  ) => void;
+  updateShapeBlock: (
+    pageNumber: number,
+    blockId: string,
+    updates: Partial<ShapeBlock>
+  ) => void;
+  updateTableSettings: (
+    pageNumber: number,
+    blockId: string,
+    settings: Partial<TableStyleSettings>
+  ) => void;
+  updateTextBlockStyle: (
+    pageNumber: number,
+    blockId: string,
+    style: Partial<BlockTypographyStyle>
+  ) => void;
+  updateTableCellStyle: (
+    pageNumber: number,
+    blockId: string,
+    rowId: number,
+    columnKey: string,
+    style: Partial<BlockTypographyStyle>
+  ) => void;
+  updateTableRow: (
+    pageNumber: number,
+    blockId: string,
+    rowId: number,
+    field: string,
+    value: string | number
+  ) => void;
+  addTableRow: (pageNumber: number, blockId: string) => void;
+  deleteTableRow: (pageNumber: number, blockId: string, rowId?: number) => void;
+  reorderTableRows: (
+    pageNumber: number,
+    blockId: string,
+    sourceIndex: number,
+    destinationIndex: number
+  ) => void;
+  addTableColumn: (pageNumber: number, blockId: string) => void;
+  deleteTableColumn: (pageNumber: number, blockId: string, columnId?: string) => void;
+  updateTableTitle: (pageNumber: number, blockId: string, title: string) => void;
+  updateTableColumnLabel: (
+    pageNumber: number,
+    blockId: string,
+    columnId: string,
+    label: string
+  ) => void;
+}
+
+export interface ComponentToolboxProps {
+  onClose?: () => void;
+  className?: string;
+}
+
+export interface PropertiesPanelProps {
+  onClose?: () => void;
+  className?: string;
+}
+
+export interface RowMarginHandleProps {
+  rowId: string;
+  edge: "top" | "bottom";
+  currentMargin: number;
+  isRowSelected: boolean;
+  isBeingResized: boolean;
+  onMouseDown: (e: React.MouseEvent) => void;
+}
+
+export interface AutoExpandingTextareaProps {
+  value: string;
+  onFocus?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  style?: React.CSSProperties;
+  className?: string;
+  placeholder?: string;
+}
+
+export interface SortableTableRowProps {
+  row: TableRowItem;
+  index: number;
+  columns: TableColumn[];
+  pageNum: number;
+  tableBlock: TableBlock;
+  isSelected: boolean;
+  hasRowSpacing: boolean;
+  isNoBorder: boolean;
+  borderStyle: string;
+  cellPadding: number;
+  isCellSelected: (rowId: number, colId: string) => boolean;
+  getEffectiveCellStyle: (
+    row: TableRowItem,
+    colId: string,
+    defaultAlign?: "left" | "center" | "right"
+  ) => React.CSSProperties;
+  handleCellFocus: (rowId: number, colId: string) => void;
+  updateTableRow: (
+    pageNumber: number,
+    blockId: string,
+    rowId: number,
+    field: string,
+    value: string | number
+  ) => void;
+}
+
+export interface CanvasTextBlockProps {
+  block: TextBlock;
+  pageNum: number;
+  rowId: string;
+  columnId: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onUpdateContent: (content: string) => void;
+  onDeleteBlock: () => void;
+}
+
+export interface CanvasTableBlockProps {
+  block: TableBlock;
+  pageNum: number;
+  rowId: string;
+  columnId: string;
+  isSelected: boolean;
+  isCellSelected: (rowId: number, colId: string) => boolean;
+  onSelect: () => void;
+  onSelectCell: (location: SelectedCellLocation | null) => void;
+  onUpdateTitle: (title: string) => void;
+  onUpdateColumnLabel: (columnId: string, label: string) => void;
+  onUpdateTableRow: (rowId: number, field: string, value: string | number) => void;
+  onAddRow: () => void;
+  onDeleteRow: (rowId?: number) => void;
+  onAddColumn: () => void;
+  onDeleteColumn: (columnId?: string) => void;
+  onDeleteBlock: () => void;
+  getEffectiveCellStyle: (
+    row: TableRowItem,
+    colId: string,
+    defaultAlign?: "left" | "center" | "right"
+  ) => React.CSSProperties;
+}
+
+export interface CanvasImageBlockProps {
+  block: ImageBlock;
+  pageNum: number;
+  rowId: string;
+  columnId: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onUpdateImage: (updates: Partial<ImageBlock>) => void;
+  onDeleteBlock: () => void;
+}
+
+export interface CanvasShapeBlockProps {
+  block: ShapeBlock;
+  pageNum: number;
+  rowId: string;
+  columnId: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDeleteBlock: () => void;
+}
+
+export interface CanvasPageSheetProps {
+  page: CanvasPage;
+  pageIndex: number;
+  totalPages: number;
+  metadata: DocumentMetadata;
+  paperSize: PaperSize;
+  activePage: number;
+  selectedBlockId: string | null;
+  selectedCell: SelectedCellLocation | null;
+  selectedRowId: string | null;
+  selectedColumnId: string | null;
+  resizingRowId: string | null;
+  resizingEdge: "top" | "bottom" | null;
+  onSelectPage: (pageNum: number) => void;
+  onSelectBlock: (id: string | null) => void;
+  onSelectCell: (cell: SelectedCellLocation | null) => void;
+  onSelectRow: (rowId: string | null) => void;
+  onSelectColumn: (colId: string | null) => void;
+  onAddPageRow: (pageNum: number) => void;
+  onDeletePageRow: (pageNum: number, rowId?: string) => void;
+  onAddPageColumn: (pageNum: number, rowId?: string) => void;
+  onDeletePageColumn: (pageNum: number, rowId?: string, colId?: string) => void;
+  onDeletePage: (pageNum: number) => void;
+  onUpdateColumnWidths: (pageNum: number, rowId: string, widths: { id: string; width: number }[]) => void;
+  onStartRowMarginResize: (e: React.MouseEvent, rowId: string, edge: "top" | "bottom", initialMargin: number) => void;
+}
+
+export interface TextPropertiesSectionProps {
+  selectedBlock: TextBlock | TableBlock;
+  activePage: number;
+  selectedCell: SelectedCellLocation | null;
+  onUpdateStyle: (style: Partial<BlockTypographyStyle>) => void;
+  onUpdateTableCellStyle: (rowId: number, columnKey: string, style: Partial<BlockTypographyStyle>) => void;
+}
+
+export interface TablePropertiesSectionProps {
+  tableBlock: TableBlock;
+  activePage: number;
+  onUpdateSettings: (settings: Partial<TableStyleSettings>) => void;
+  onAddRow: () => void;
+  onDeleteRow: () => void;
+  onAddColumn: () => void;
+  onDeleteColumn: () => void;
+}
+
+export interface ImagePropertiesSectionProps {
+  imageBlock: ImageBlock;
+  activePage: number;
+  onUpdateImage: (updates: Partial<ImageBlock>) => void;
+}
+
+export interface ShapePropertiesSectionProps {
+  shapeBlock: ShapeBlock;
+  activePage: number;
+  onUpdateShape: (updates: Partial<ShapeBlock>) => void;
+}
+
+export interface MetadataPropertiesSectionProps {
+  metadata: DocumentMetadata;
+  onUpdateMetadata: (updates: Partial<DocumentMetadata>) => void;
+}
+
 

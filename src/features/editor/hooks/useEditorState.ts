@@ -22,645 +22,46 @@ import {
   BlockUpdatePayload,
   PaperSize,
   PAPER_SIZES,
+  EditorStoreState,
 } from "../types";
+import {
+  INITIAL_METADATA,
+  INITIAL_TABLE_ROWS,
+  INITIAL_PAGE_ROWS,
+  INITIAL_BLOCKS,
+  extractAllBlocksFromRows,
+  getPageLayoutRows,
+  getPageCapacity,
+  getTableOverheadHeight,
+  getTableRowHeight,
+  getBlockHeight,
+  getBlockWeight,
+  getColumnHeight,
+  getColumnWeight,
+  getRowHeight,
+  getRowWeight,
+  isMatchingTableBlock,
+  reflowPages,
+} from "../utils/paginationUtils";
 
-export interface EditorStoreState {
-  activeTemplateId: string;
-  selectedBlockId: string | null;
-  selectedCell: SelectedCellLocation | null;
-  selectedRowId: string | null;
-  selectedColumnId: string | null;
-  metadata: DocumentMetadata;
-  paperSize: PaperSize;
-  pages: CanvasPage[];
-  activePage: number;
-  activeTool: ToolType;
-  zoomLevel: string;
-  isFullscreen: boolean;
-  lastSavedAt: string | null;
-  saveMessage: string | null;
-
-  // Template management
-  setActiveTemplateId: (id: string) => void;
-  saveCurrentTemplate: (name?: string) => void;
-  loadTemplate: (snapshot: DocumentStateSnapshot, templateId?: string) => void;
-  resetToDefault: () => void;
-
-  // Viewport & Tools Actions
-  setSelectedBlockId: (id: string | null) => void;
-  setSelectedCell: (cell: SelectedCellLocation | null) => void;
-  setSelectedRowId: (rowId: string | null) => void;
-  setSelectedColumnId: (columnId: string | null) => void;
-  setActiveTool: (tool: ToolType) => void;
-  setZoomLevel: (zoom: string) => void;
-  setPaperSize: (paperSize: PaperSize) => void;
-  toggleFullscreen: () => void;
-  setActivePage: (pageNumber: number) => void;
-  addPage: () => void;
-  deletePage: (pageNumber: number) => void;
-
-  // Page Grid (Row & Column) Management
-  addPageRow: (pageNumber: number) => void;
-  deletePageRow: (pageNumber: number, rowId?: string) => void;
-  addPageColumn: (pageNumber: number, rowId?: string) => void;
-  deletePageColumn: (pageNumber: number, rowId?: string, columnId?: string) => void;
-  updateRowColumnWidths: (
-    pageNumber: number,
-    rowId: string,
-    columnWidths: { id: string; width: number }[]
-  ) => void;
-  updateRowMargins: (
-    pageNumber: number,
-    rowId: string,
-    margins: { marginTop?: number; marginBottom?: number }
-  ) => void;
-  updateRowPadding: (
-    pageNumber: number,
-    rowId: string,
-    padding: {
-      paddingTop?: number;
-      paddingBottom?: number;
-    }
-  ) => void;
-
-  // Component insertion with auto-pagination
-  addElement: (type: "text" | "table" | "image" | "shape") => void;
-  addElementToColumn: (
-    pageNumber: number,
-    rowId: string,
-    columnId: string,
-    type: "text" | "table" | "image" | "shape"
-  ) => void;
-  removeElement: (pageNumber: number, blockId: string) => void;
-
-  // Content updates
-  setMetadata: (updates: Partial<DocumentMetadata>) => void;
-  updateTextBlock: (pageNumber: number, blockId: string, content: string) => void;
-  updateBlockStyle: (
-    pageNumber: number,
-    blockId: string,
-    style: BlockUpdatePayload
-  ) => void;
-  updateImageBlock: (
-    pageNumber: number,
-    blockId: string,
-    updates: Partial<ImageBlock>
-  ) => void;
-  updateShapeBlock: (
-    pageNumber: number,
-    blockId: string,
-    updates: Partial<ShapeBlock>
-  ) => void;
-  updateTableSettings: (
-    pageNumber: number,
-    blockId: string,
-    settings: Partial<TableStyleSettings>
-  ) => void;
-  updateTextBlockStyle: (
-    pageNumber: number,
-    blockId: string,
-    style: Partial<BlockTypographyStyle>
-  ) => void;
-  updateTableCellStyle: (
-    pageNumber: number,
-    blockId: string,
-    rowId: number,
-    columnKey: string,
-    style: Partial<BlockTypographyStyle>
-  ) => void;
-  updateTableRow: (
-    pageNumber: number,
-    blockId: string,
-    rowId: number,
-    field: string,
-    value: string | number
-  ) => void;
-  addTableRow: (pageNumber: number, blockId: string) => void;
-  deleteTableRow: (pageNumber: number, blockId: string, rowId?: number) => void;
-  reorderTableRows: (
-    pageNumber: number,
-    blockId: string,
-    sourceIndex: number,
-    destinationIndex: number
-  ) => void;
-  addTableColumn: (pageNumber: number, blockId: string) => void;
-  deleteTableColumn: (pageNumber: number, blockId: string, columnId?: string) => void;
-  updateTableTitle: (pageNumber: number, blockId: string, title: string) => void;
-  updateTableColumnLabel: (
-    pageNumber: number,
-    blockId: string,
-    columnId: string,
-    label: string
-  ) => void;
-}
-
-export const INITIAL_METADATA: DocumentMetadata = {
-  companyName: "Your Company",
-  companyTagline: "Better Documents, Better Business",
-  documentTitle: "VISUAL DOCUMENT",
-  issuerDetails: "Issuer Details",
-  clientDetails: "Client Details",
-  documentNumber: "C-2026-061",
-  documentDate: "2026-09-14",
-};
-
-export const extractAllBlocksFromRows = (rows: PageGridRow[]): CanvasBlock[] => {
-  const blocks: CanvasBlock[] = [];
-  rows.forEach((row) => {
-    row.columns.forEach((col) => {
-      blocks.push(...col.blocks);
-    });
-  });
-  return blocks;
-};
-
-export const INITIAL_TABLE_ROWS: TableRowItem[] = [
-  { id: 1, item: "Product A", qty: 2, unitPrice: "$10.00", amount: "$20.00" },
-  { id: 2, item: "Product B", qty: 3, unitPrice: "$10.00", amount: "$45.00" },
-  { id: 3, item: "Product B", qty: 1, unitPrice: "$15.00", amount: "$45.00" },
-  { id: 4, item: "Product C", qty: 1, unitPrice: "$50.00", amount: "$50.00" },
-  { id: 5, item: "Product D", qty: 5, unitPrice: "$8.00", amount: "$40.00" },
-];
-
-export const INITIAL_PAGE_ROWS: PageGridRow[] = [
-  {
-    id: "page-row-header",
-    marginTop: 0,
-    marginBottom: 8,
-    paddingTop: 0,
-    paddingBottom: 0,
-    columns: [
-      {
-        id: "col-header-logo",
-        width: 8,
-        blocks: [
-          {
-            id: "header-logo-1",
-            type: "image",
-            caption: "Company Logo",
-            isLogoPreset: true,
-            width: 42,
-            height: 42,
-            align: "left",
-            borderRadius: 8,
-          },
-        ],
-      },
-      {
-        id: "col-header-company",
-        width: 52,
-        blocks: [
-          {
-            id: "header-company-name",
-            type: "text",
-            content: "Your Company",
-            fontFamily: "Inter",
-            fontSize: 22,
-            fontWeight: "800",
-            color: "#0f172a",
-            align: "left",
-          },
-          {
-            id: "header-company-tagline",
-            type: "text",
-            content: "Better Documents, Better Business",
-            fontFamily: "Inter",
-            fontSize: 12,
-            fontWeight: "500",
-            color: "#64748b",
-            align: "left",
-          },
-        ],
-      },
-      {
-        id: "col-header-title",
-        width: 40,
-        blocks: [
-          {
-            id: "header-doc-title",
-            type: "text",
-            content: "VISUAL DOCUMENT",
-            fontFamily: "Inter",
-            fontSize: 22,
-            fontWeight: "900",
-            color: "#0f172a",
-            align: "right",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "page-row-divider",
-    marginTop: 0,
-    marginBottom: 14,
-    paddingTop: 0,
-    paddingBottom: 0,
-    columns: [
-      {
-        id: "col-divider-main",
-        width: 100,
-        blocks: [
-          {
-            id: "header-divider-1",
-            type: "shape",
-            shapeType: "divider",
-            color: "#2563eb",
-            height: 1.5,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "page-row-meta",
-    marginTop: 0,
-    marginBottom: 16,
-    paddingTop: 0,
-    paddingBottom: 0,
-    columns: [
-      {
-        id: "col-meta-issuer",
-        width: 33.3,
-        blocks: [
-          {
-            id: "meta-block-issuer",
-            type: "text",
-            content: "ISSUER/\nIssuer Details",
-            fontFamily: "Inter",
-            fontSize: 13,
-            fontWeight: "700",
-            color: "#0f172a",
-            align: "left",
-          },
-        ],
-      },
-      {
-        id: "col-meta-client",
-        width: 33.3,
-        blocks: [
-          {
-            id: "meta-block-client",
-            type: "text",
-            content: "Client Details",
-            fontFamily: "Inter",
-            fontSize: 13,
-            fontWeight: "700",
-            color: "#0f172a",
-            align: "left",
-          },
-        ],
-      },
-      {
-        id: "col-meta-nodate",
-        width: 33.4,
-        blocks: [
-          {
-            id: "meta-block-nodate",
-            type: "text",
-            content: "No/Date:  C-2026-061\n2026-09-14",
-            fontFamily: "Inter",
-            fontSize: 13,
-            fontWeight: "700",
-            color: "#0f172a",
-            align: "right",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "page-row-table",
-    marginTop: 0,
-    marginBottom: 16,
-    paddingTop: 0,
-    paddingBottom: 0,
-    columns: [
-      {
-        id: "col-table-main",
-        width: 100,
-        blocks: [
-          {
-            id: "initial-table-1",
-            type: "table",
-            title: "QUOTATION ITEMS",
-            columns: DEFAULT_TABLE_COLUMNS,
-            rows: INITIAL_TABLE_ROWS,
-            fontFamily: "Inter",
-            fontSize: 14,
-            fontWeight: "400",
-            color: "#1F2937",
-            align: "left",
-            tableWidth: "100%",
-            borderStyle: "1px solid #E5E7EB",
-            padding: 8,
-            rowSpacing: 0,
-          },
-        ],
-      },
-    ],
-  },
-];
-
-export const INITIAL_BLOCKS: CanvasBlock[] = extractAllBlocksFromRows(INITIAL_PAGE_ROWS);
-
-export const getPageLayoutRows = (page: CanvasPage): PageGridRow[] => {
-  if (page.layoutRows && page.layoutRows.length > 0) {
-    return page.layoutRows;
-  }
-  if (page.blocks && page.blocks.length > 0) {
-    return page.blocks.map((b, idx) => ({
-      id: `row-legacy-${idx}-${b.id}`,
-      columns: [
-        {
-          id: `col-legacy-${idx}-${b.id}`,
-          blocks: [b],
-        },
-      ],
-    }));
-  }
-  return [
-    {
-      id: `row-empty-1`,
-      columns: [{ id: `col-empty-1`, blocks: [] }],
-    },
-  ];
-};
-
-// Dynamic Page Capacity based on Paper Size
-export const getPageCapacity = (pageNumber: number, paperSize?: PaperSize): number => {
-  const currentPaper =
-    paperSize ||
-    (typeof useEditorState !== "undefined" && useEditorState.getState
-      ? useEditorState.getState().paperSize
-      : "tabloid") ||
-    "tabloid";
-  const config = PAPER_SIZES[currentPaper] || PAPER_SIZES.tabloid;
-  return pageNumber === 1 ? config.page1Capacity : config.pageNCapacity;
-};
-
-// Estimated height weight per block type
-export const getBlockWeight = (block: CanvasBlock): number => {
-  switch (block.type) {
-    case "table": {
-      const rowCount = block.rows ? block.rows.length : 0;
-      return 1.5 + rowCount * 0.7;
-    }
-    case "text": {
-      const content = block.content || "";
-      const explicitLines = content.split("\n").length;
-      const wrappedLines = Math.floor(content.length / 65);
-      const totalLines = Math.max(1, explicitLines + wrappedLines);
-      const fontSizeMultiplier = (block.fontSize || 14) / 14;
-      return Math.max(0.4, 0.2 + totalLines * 0.3 * fontSizeMultiplier);
-    }
-    case "image": {
-      const isLogo = (block as ImageBlock).isLogoPreset || ((block as ImageBlock).width && Number((block as ImageBlock).width) <= 80);
-      return isLogo ? 0.9 : 4.5;
-    }
-    case "shape":
-      return 0.4;
-    default:
-      return 1.0;
-  }
-};
-
-export const getColumnWeight = (col: PageGridColumn): number => {
-  return col.blocks.reduce((sum, b) => sum + getBlockWeight(b), 0);
-};
-
-export const getRowWeight = (row: PageGridRow): number => {
-  if (!row.columns || row.columns.length === 0) return 0.8;
-  const colWeights = row.columns.map((col) => getColumnWeight(col));
-  return Math.max(0.8, ...colWeights);
-};
-
-// Helper: Match table blocks by base ID across split continuation fragments
-export const isMatchingTableBlock = (b: CanvasBlock, targetId: string): boolean => {
-  if (b.type !== "table") return false;
-  if (b.id === targetId) return true;
-  const targetBase = targetId.replace(/-split-\d+$/, "");
-  const bBase = b.id.replace(/-split-\d+$/, "");
-  return targetBase === bBase;
-};
-
-// Helper: Normalize rows across pages and merge any split tables back into unified tables
-const mergeSplitTablesInRows = (rows: PageGridRow[]): PageGridRow[] => {
-  const mergedRows: PageGridRow[] = [];
-  const tableMap = new Map<string, TableBlock>();
-
-  rows.forEach((row) => {
-    let isSplitContinuationRow = false;
-
-    const clonedCols = row.columns.map((col) => {
-      const clonedBlocks = col.blocks.map((block) => {
-        if (block.type === "table") {
-          const table = block as TableBlock;
-          const splitMatch = table.id.match(/^(.+)-split-(\d+)$/);
-          if (splitMatch) {
-            const baseId = splitMatch[1];
-            const existing = tableMap.get(baseId);
-            if (existing) {
-              // Merge rows into original table
-              existing.rows = [...existing.rows, ...table.rows];
-              isSplitContinuationRow = true;
-            }
-            return { ...table };
-          } else {
-            const clonedTable = { ...table, rows: [...table.rows] };
-            tableMap.set(table.id, clonedTable);
-            return clonedTable;
-          }
-        }
-        return block;
-      });
-      return { ...col, blocks: clonedBlocks };
-    });
-
-    if (!isSplitContinuationRow) {
-      mergedRows.push({ ...row, columns: clonedCols });
-    }
-  });
-
-  return mergedRows;
-};
-
-// Dynamic Bi-Directional Auto-Pagination & Reflow Engine (with Table Splitting)
-export const reflowPages = (pages: CanvasPage[], paperSize?: PaperSize): CanvasPage[] => {
-  if (!pages || pages.length === 0) {
-    return [
-      {
-        pageNumber: 1,
-        layoutRows: INITIAL_PAGE_ROWS,
-        blocks: INITIAL_BLOCKS,
-      },
-    ];
-  }
-
-  const effectivePaperSize =
-    paperSize ||
-    (typeof useEditorState !== "undefined" && useEditorState.getState
-      ? useEditorState.getState().paperSize
-      : "tabloid") ||
-    "tabloid";
-
-  // 1. Collect all layout rows in continuous sequence across all pages
-  const allRows: PageGridRow[] = [];
-  pages.forEach((p) => {
-    const rows = getPageLayoutRows(p);
-    allRows.push(...rows);
-  });
-
-  // 2. Merge split tables back to accurately compute capacity
-  const unifiedRows = mergeSplitTablesInRows(allRows);
-  const rowsToProcess = unifiedRows.length > 0 ? unifiedRows : INITIAL_PAGE_ROWS;
-
-  // 3. Pack rows into pages sequentially according to paper budget
-  const reflowedPages: CanvasPage[] = [];
-  let currentPageNum = 1;
-  let currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
-  let currentPageRows: PageGridRow[] = [];
-  let currentWeight = 0;
-
-  for (let i = 0; i < rowsToProcess.length; i++) {
-    const row = rowsToProcess[i];
-
-    // Check if this row is a single-table row that might overflow and need row splitting
-    const isSingleTable =
-      row.columns.length === 1 &&
-      row.columns[0].blocks.length === 1 &&
-      row.columns[0].blocks[0].type === "table";
-
-    if (isSingleTable) {
-      let table = { ...(row.columns[0].blocks[0] as TableBlock) };
-      table.rows = [...table.rows];
-
-      while (table.rows.length > 0) {
-        const remainingCapacity = currentCapacity - currentWeight;
-
-        // If not enough room on this page even for header + 1 table row (approx 2.2 units),
-        // and current page already has content, advance to next page
-        if (remainingCapacity < 2.2 && currentPageRows.length > 0) {
-          reflowedPages.push({
-            pageNumber: currentPageNum,
-            layoutRows: currentPageRows,
-            blocks: extractAllBlocksFromRows(currentPageRows),
-          });
-
-          currentPageNum++;
-          currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
-          currentPageRows = [];
-          currentWeight = 0;
-          continue;
-        }
-
-        // Available space for table rows on this page
-        const spaceForRows = Math.max(0.7, currentCapacity - currentWeight - 1.5);
-        const maxRowsThatFit = Math.max(1, Math.floor(spaceForRows / 0.7));
-
-        if (table.rows.length <= maxRowsThatFit) {
-          // Entire table (or remaining portion) fits on current page!
-          const finalTableWeight = 1.5 + table.rows.length * 0.7;
-          const placedRow: PageGridRow = {
-            id: row.id,
-            columns: [{ id: row.columns[0].id, blocks: [table] }],
-            marginTop: row.marginTop,
-            marginBottom: row.marginBottom,
-            paddingTop: row.paddingTop,
-            paddingBottom: row.paddingBottom,
-          };
-          currentPageRows.push(placedRow);
-          currentWeight += finalTableWeight;
-          break; // Done with this table block
-        } else {
-          // Split table: place maxRowsThatFit on this page, and rest on next page
-          const rowsForThisPage = table.rows.slice(0, maxRowsThatFit);
-          const rowsForNextPage = table.rows.slice(maxRowsThatFit);
-
-          const tablePart: TableBlock = {
-            ...table,
-            rows: rowsForThisPage,
-          };
-
-          const placedRow: PageGridRow = {
-            id: row.id,
-            columns: [{ id: row.columns[0].id, blocks: [tablePart] }],
-            marginTop: row.marginTop,
-            marginBottom: row.marginBottom,
-            paddingTop: row.paddingTop,
-            paddingBottom: row.paddingBottom,
-          };
-          currentPageRows.push(placedRow);
-
-          // Push completed page
-          reflowedPages.push({
-            pageNumber: currentPageNum,
-            layoutRows: currentPageRows,
-            blocks: extractAllBlocksFromRows(currentPageRows),
-          });
-
-          // Advance to next continuation page
-          currentPageNum++;
-          currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
-          currentPageRows = [];
-          currentWeight = 0;
-
-          const baseTitle = table.title.replace(/\s*\(Cont\.\)$/, "");
-          const baseId = table.id.replace(/-split-\d+$/, "");
-
-          table = {
-            ...table,
-            id: `${baseId}-split-${currentPageNum}`,
-            title: `${baseTitle} (Cont.)`,
-            rows: rowsForNextPage,
-          };
-        }
-      }
-    } else {
-      // General row (multi-column or non-table blocks)
-      const rowWeight = getRowWeight(row);
-
-      // If doesn't fit on current page and current page already has content, push page
-      if (currentWeight + rowWeight > currentCapacity && currentPageRows.length > 0) {
-        reflowedPages.push({
-          pageNumber: currentPageNum,
-          layoutRows: currentPageRows,
-          blocks: extractAllBlocksFromRows(currentPageRows),
-        });
-
-        currentPageNum++;
-        currentCapacity = getPageCapacity(currentPageNum, effectivePaperSize);
-        currentPageRows = [row];
-        currentWeight = rowWeight;
-      } else {
-        currentPageRows.push(row);
-        currentWeight += rowWeight;
-      }
-    }
-  }
-
-  // Finalize last page
-  if (currentPageRows.length > 0) {
-    reflowedPages.push({
-      pageNumber: currentPageNum,
-      layoutRows: currentPageRows,
-      blocks: extractAllBlocksFromRows(currentPageRows),
-    });
-  }
-
-  // Ensure at least 1 page
-  if (reflowedPages.length === 0) {
-    reflowedPages.push({
-      pageNumber: 1,
-      layoutRows: INITIAL_PAGE_ROWS,
-      blocks: INITIAL_BLOCKS,
-    });
-  }
-
-  return reflowedPages.map((p, idx) => ({
-    ...p,
-    pageNumber: idx + 1,
-  }));
+export {
+  INITIAL_METADATA,
+  INITIAL_TABLE_ROWS,
+  INITIAL_PAGE_ROWS,
+  INITIAL_BLOCKS,
+  extractAllBlocksFromRows,
+  getPageLayoutRows,
+  getPageCapacity,
+  getTableOverheadHeight,
+  getTableRowHeight,
+  getBlockHeight,
+  getBlockWeight,
+  getColumnHeight,
+  getColumnWeight,
+  getRowHeight,
+  getRowWeight,
+  isMatchingTableBlock,
+  reflowPages,
 };
 
 const autoSaveToStorage = (
@@ -767,14 +168,18 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       const nextPageNum = state.pages.length + 1;
       const newRowId = `row-${Date.now()}-1`;
       const newColId = `col-${Date.now()}-1`;
+      const newRow: PageGridRow = {
+        id: newRowId,
+        columns: [{ id: newColId, blocks: [] }],
+        pageBreakBefore: true,
+        marginTop: 0,
+        marginBottom: 12,
+        paddingTop: 0,
+        paddingBottom: 0,
+      };
       const newPage: CanvasPage = {
         pageNumber: nextPageNum,
-        layoutRows: [
-          {
-            id: newRowId,
-            columns: [{ id: newColId, blocks: [] }],
-          },
-        ],
+        layoutRows: [newRow],
         blocks: [],
       };
       const updatedPages = [...state.pages, newPage];
@@ -1005,8 +410,9 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
-      return { pages: updatedPages };
+      const reflowed = reflowPages(updatedPages);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
@@ -1030,8 +436,9 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
-      return { pages: updatedPages };
+      const reflowed = reflowPages(updatedPages);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
