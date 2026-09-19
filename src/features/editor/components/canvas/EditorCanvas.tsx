@@ -206,7 +206,7 @@ export function EditorCanvas() {
   }
 
   const currentPage = pages.find((p) => p.pageNumber === activePage) || pages[0];
-  const currentPaperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.tabloid;
+  const currentPaperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.a4;
 
   return (
     <div className="w-full flex flex-col select-none min-w-0">

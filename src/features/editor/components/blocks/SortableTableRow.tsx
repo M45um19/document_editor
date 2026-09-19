@@ -142,8 +142,6 @@ export function SortableTableRow({
                 }}
                 onChange={(e) =>
                   updateTableRow(
-                    pageNum,
-                    tableBlock.id,
                     row.id,
                     "item",
                     e.target.value
@@ -183,8 +181,6 @@ export function SortableTableRow({
                 }}
                 onChange={(e) =>
                   updateTableRow(
-                    pageNum,
-                    tableBlock.id,
                     row.id,
                     "qty",
                     Number(e.target.value) || 0
@@ -224,8 +220,6 @@ export function SortableTableRow({
                 }}
                 onChange={(e) =>
                   updateTableRow(
-                    pageNum,
-                    tableBlock.id,
                     row.id,
                     "unitPrice",
                     e.target.value
@@ -246,25 +240,37 @@ export function SortableTableRow({
           return (
             <td
               key={col.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCellFocus(row.id, col.id);
-              }}
               style={{
-                ...cellStyle,
                 paddingTop: `${cellPadding}px`,
                 paddingBottom: `${cellPadding}px`,
                 paddingLeft: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
                 paddingRight: `${Math.max(4, Math.round(cellPadding * 0.9))}px`,
                 ...commonCellBorder,
               }}
-              className={`text-right cursor-pointer rounded-md transition-all ${
-                isSelectedCell
-                  ? "ring-2 ring-blue-500/40 bg-blue-50/60 font-semibold"
-                  : "hover:bg-slate-100/60"
-              } ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
+              className={`text-right ${hasRowSpacing && isLastCol ? "rounded-r-lg" : ""}`}
             >
-              {row.amount}
+              <input
+                type="text"
+                value={row.amount ?? ""}
+                onFocus={() => handleCellFocus(row.id, col.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCellFocus(row.id, col.id);
+                }}
+                onChange={(e) =>
+                  updateTableRow(
+                    row.id,
+                    "amount",
+                    e.target.value
+                  )
+                }
+                style={cellStyle}
+                className={`text-right outline-none border rounded-md px-2 py-1 w-full transition-all ${
+                  isSelectedCell
+                    ? "border-blue-500 ring-2 ring-blue-500/40 bg-white shadow-2xs"
+                    : "border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50/50 focus:border-blue-500 focus:bg-white"
+                }`}
+              />
             </td>
           );
         }
@@ -298,8 +304,6 @@ export function SortableTableRow({
               }}
               onChange={(e) =>
                 updateTableRow(
-                  pageNum,
-                  tableBlock.id,
                   row.id,
                   col.id,
                   e.target.value

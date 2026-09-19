@@ -24,7 +24,7 @@ export function CleanDocumentSheet({
   id,
   className = "",
 }: CleanDocumentSheetProps) {
-  const paperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.tabloid;
+  const paperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.a4;
 
   const renderBlock = (block: CanvasBlock) => {
     switch (block.type) {

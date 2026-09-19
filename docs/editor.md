@@ -1,7 +1,7 @@
 # Feature Guide: Visual Editor & Canvas
 
 ## Overview
-The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4 sheets, in-table and cell-level editing, inline table heading and column name customization, dynamic page grid layout management, interactive column border drag-resizing, canvas-driven top/bottom row margin resizing, and real-time styling controls via the properties sidebar.
+The Editor feature (`src/features/editor/`) is the central workspace of the document application. It manages dynamic block authoring, multi-level undo/redo history, tool selection, canvas rendering, bi-directional auto-pagination across multi-page A4/Tabloid/Letter/Legal sheets, in-table and cell-level editing (including editable Amount column with real-time recalculations), inline table heading and column name customization, dynamic page grid layout management, interactive column border drag-resizing, canvas-driven top/bottom row margin resizing, instant auto-expanding text blocks, and real-time styling controls via the properties sidebar.
 
 ---
 
@@ -15,11 +15,11 @@ src/
 └── features/editor/
     ├── components/
     │   ├── blocks/
-    │   │   ├── CanvasTextBlock.tsx        # Editable typography text block renderer
-    │   │   ├── CanvasTableBlock.tsx       # Table block renderer with headers, action bar, and rows
+    │   │   ├── CanvasTextBlock.tsx        # Editable typography text block renderer (Zero-lag auto-height)
+    │   │   ├── CanvasTableBlock.tsx       # Table block renderer with headers, action bar, and editable rows
     │   │   ├── CanvasImageBlock.tsx       # Image / logo block renderer with upload & alignment
     │   │   ├── CanvasShapeBlock.tsx       # Shape divider accent line renderer
-    │   │   └── SortableTableRow.tsx       # Draggable sortable table row component
+    │   │   └── SortableTableRow.tsx       # Draggable sortable table row component with inline cell editing
     │   ├── canvas/
     │   │   ├── EditorCanvas.tsx           # Center canvas orchestrator with zoom & DndContext
     │   │   ├── CanvasPageSheet.tsx        # Single document paper sheet renderer with grid rows & margins
@@ -34,14 +34,14 @@ src/
     │   ├── toolbox/
     │   │   └── ComponentToolbox.tsx       # Left dark sidebar (Tools, Quick Add, Page Thumbnails)
     │   ├── common/
-    │   │   └── AutoExpandingTextarea.tsx  # Dynamic auto-height textarea primitive
+    │   │   └── AutoExpandingTextarea.tsx  # Synchronous pre-paint auto-height textarea primitive
     │   └── index.ts                       # Central barrel export for editor components
     ├── hooks/
-    │   └── useEditorState.ts          # Central Zustand store for editor domain state & actions
+    │   └── useEditorState.ts          # Central Zustand store for editor domain state, undo/redo history & actions
     ├── utils/
     │   └── paginationUtils.ts         # Pure pagination reflow math, block weight, and capacity engines
     └── types/
-        └── index.ts                   # Centralized domain types, block models, and component props
+        └── index.ts                   # Centralized domain types, block models, history snapshots, and component props
 ```
 
 ---
@@ -54,11 +54,15 @@ Located at the top of the viewport (`h-14 sm:h-16 2xl:h-20`, white background, b
 * **Mobile Toolbox Toggle:** Drawer trigger icon (`PanelLeft`) visible on mobile/tablet viewports.
 * **App Logo & Title:** File icon wrapped in a blue square badge (`bg-blue-600`) + `"Document Editor (PoC)"`.
 * **Project Name Field:** Inline text input (`Project Name`) with default value `"Document Project V1"`.
+* **Undo & Redo Action Buttons:**
+  * `Undo` (`RotateCcw` icon): Reverts the document to its previous state. Automatically disabled when `past` history is empty. Accessible via keyboard shortcut `Ctrl+Z` / `Cmd+Z`.
+  * `Redo` (`RotateCw` icon): Restores previously undone modifications. Automatically disabled when `future` history is empty. Accessible via keyboard shortcut `Ctrl+Y`, `Ctrl+Shift+Z`, or `Cmd+Shift+Z`.
+  * **Debounced History Capture:** Continuous text editing utilizes an 800ms debounce window to bundle consecutive keystrokes into unified undo steps, preventing fine-grained micro-history fragmentation.
 * **Action Buttons (Right Section):**
   * `Properties` (`SlidersHorizontal` icon, mobile only): Smoothly scrolls down to the properties panel on small screens.
   * `Preview` (`Eye` icon): Opens the high-fidelity **Document Preview Modal** (`DocumentPreviewModal.tsx`), displaying clean, multi-page print-accurate views with zero editor chrome, continuous (All Pages) or single-page view modes, and direct PDF download.
   * `Save` (`Save` icon): Persists active document state to dedicated LocalStorage slots, updates template timestamp in `useTemplatesState`, and displays an animated emerald confirmation badge (`Saved!` with `Check` icon).
-  * `Download PDF` (`Download` icon): Automatically triggers direct client-side high-resolution PDF download (`pdfExportService.ts` via `html2canvas-pro` + `jsPDF`) formatted to the active paper dimensions (Tabloid, A4, Letter, Legal) with zero print modals.
+  * `Download PDF` (`Download` icon): Automatically triggers direct client-side high-resolution PDF download (`pdfExportService.ts` via `html2canvas-pro` + `jsPDF`) formatted to the active paper dimensions (A4, Tabloid, Letter, Legal) with zero print modals.
 
 ---
 
@@ -67,10 +71,13 @@ Fixed left sidebar (`bg-[#081225]` dark theme, `w-52` to `w-80` responsive width
 
 * **Components Section:**
   * `Select`: Activates pointer selection mode (default active tool).
-  * `Text Block`: Inserts a clean editable text block into the active page.
-  * `Simple Table`: Inserts an interactive data table with default columns into the active page.
+  * `Text Block`: Inserts a clean editable text block into a dedicated full-width row on the active page.
+  * `Simple Table`: Inserts an interactive data table with default columns into a dedicated full-width row.
   * `Image`: Inserts an image / logo block with preset icon or custom upload.
   * `Shape`: Inserts a decorative geometric gradient divider.
+* **Intelligent Insertion Architecture:**
+  * Adding tables or new components automatically creates dedicated 100%-width rows and safely appends them without polluting header or metadata columns.
+  * Initial selection defaults to clean unselected state (`selectedRowId: null`, `selectedColumnId: null`).
 * **Quick Add Actions:**
   * `[+ Add Simple Table]`: Appends a new data table node to the canvas.
   * `[+ Add New Text Line]`: Appends an editable text block.
@@ -85,14 +92,14 @@ Fixed left sidebar (`bg-[#081225]` dark theme, `w-52` to `w-80` responsive width
 Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR hydration protection.
 
 * **Viewport Top Controls:**
-  * **Interactive Paper Size Selector:** Dropdown menu supporting **Tabloid / Ledger** (Default, `11 × 17 in` / `279 × 432 mm`), **A4** (`210 × 297 mm`), **Letter (US)** (`8.5 × 11 in`), and **Legal (US)** (`8.5 × 14 in`).
+  * **Interactive Paper Size Selector:** Dropdown menu supporting **A4** (Default, `210 × 297 mm` / `8.27 × 11.69 in`), **Tabloid / Ledger** (`11 × 17 in` / `279 × 432 mm`), **Letter (US)** (`8.5 × 11 in`), and **Legal (US)** (`8.5 × 14 in`).
   * **Pagination navigation:** `[←] Page N of Total [→]` buttons with boundary disable states.
   * **Zoom dropdown selector:** `75%`, `100%`, `125%`, `150%`.
   * **Fullscreen maximize toggle:** `Maximize2` button.
 * **Document Sheet Container (`#document-sheet`):**
   * Dynamic dimensions applied based on active `paperSize` configuration:
-    * **Tabloid / Ledger:** `max-w-[1056px] min-h-[1632px]` (Default)
-    * **A4:** `max-w-[794px] min-h-[1123px]`
+    * **A4:** `max-w-[794px] min-h-[1123px]` (Default Standard)
+    * **Tabloid / Ledger:** `max-w-[1056px] min-h-[1632px]`
     * **Letter (US):** `max-w-[816px] min-h-[1056px]`
     * **Legal (US):** `max-w-[816px] min-h-[1344px]`
   * Clicking the blank document sheet clears active selection and resets canvas to clean document mode.
@@ -105,6 +112,14 @@ Center work area rendered on `#f0f4f9` canvas background with `useMounted()` SSR
     * **Row 3 (`page-row-meta`):** 3 columns housing editable `TextBlock` elements for `ISSUER/\nIssuer Details`, `Client Details`, and `No/Date: C-2026-061\n2026-09-14`.
     * **Row 4 (`page-row-table`):** 1 column housing the `QUOTATION ITEMS` data table.
     * **Continuation Rows:** Multi-column rows containing text, tables, images, or dividers.
+* **Instant Real-Time Auto-Expanding Text Blocks (`CanvasTextBlock.tsx` & `AutoExpandingTextarea.tsx`):**
+  * Built using `useIsomorphicLayoutEffect` to dynamically resize `<textarea>` bounding boxes synchronously before the browser paints.
+  * Responds instantaneously to typing, pasting, multi-line linebreaks, and property panel font size / family / weight / alignment changes with zero clipping.
+  * Connects `document.fonts.ready` listeners to ensure proper dimensions once Google Fonts load asynchronously.
+  * Uses `transition-colors` instead of `transition-all` so height measurement is never delayed by CSS transitions.
+* **Full In-Table Inline & Cell Editing (`SortableTableRow.tsx`):**
+  * All row cells (`item`, `qty`, `unitPrice`, `amount`, and custom columns) feature inline `<input>` fields.
+  * Changing `qty` or `unitPrice` automatically recalculates the `amount` cell (`qty × unitPrice`), while allowing full manual numeric or formatted override in the `amount` input.
 * **Canvas-Driven ↕ Row Margin Resizing (`RowMarginHandle`):**
   * Each grid row includes interactive **Top Margin** and **Bottom Margin** drag handles on the canvas.
   * Dragging handles adjusts vertical spacing (`marginTop`, `marginBottom` from `0px` to `300px`) with live dashed guideline overlays and tooltip badges.
@@ -182,25 +197,25 @@ The editor renders document pages according to the chosen paper format:
 
 | Paper Size | Dimensions (mm) | Dimensions (in) | Canvas Dimensions (px) | Page 1 Budget | Continuation Page Budget |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Tabloid / Ledger** | 279 × 432 mm | 11.00 × 17.00 in | 1056 × 1632 px | 25.0 units | 30.0 units |
-| **A4** | 210 × 297 mm | 8.27 × 11.69 in | 794 × 1123 px | 16.0 units | 19.0 units |
-| **Letter (US)** | 216 × 279 mm | 8.50 × 11.00 in | 816 × 1056 px | 13.5 units | 16.0 units |
-| **Legal (US)** | 216 × 356 mm | 8.50 × 14.00 in | 816 × 1344 px | 21.0 units | 25.0 units |
+| **A4** | 210 × 297 mm | 8.27 × 11.69 in | 794 × 1123 px | 650 px | 780 px |
+| **Tabloid / Ledger** | 279 × 432 mm | 11.00 × 17.00 in | 1056 × 1632 px | 1080 px | 1260 px |
+| **Letter (US)** | 216 × 279 mm | 8.50 × 11.00 in | 816 × 1056 px | 600 px | 720 px |
+| **Legal (US)** | 216 × 356 mm | 8.50 × 14.00 in | 816 × 1344 px | 860 px | 1020 px |
 
 ### Bi-Directional Reflow & Table Row Splitting System (`reflowPages`)
 
 1. **Continuous Sequential Reflow:**
-   - On every state modification, `reflowPages` consolidates all page layout rows, re-merges any split table fragments via `mergeSplitTablesInRows`, and calculates layout row weights against the active paper size budget.
+   - On every state modification, `reflowPages` consolidates all page layout rows, re-merges any split table fragments via `mergeSplitTablesInRows`, and calculates layout row heights against the active paper size capacity in pixels.
 2. **Table Row Splitting across Pages:**
    - Single-table layout rows evaluate their remaining page capacity:
-     $$\text{spaceForRows} = \max(0.9, \text{currentCapacity} - \text{currentWeight} - 2.0)$$
-     $$\text{maxRowsThatFit} = \max(1, \lfloor\text{spaceForRows} / 0.9\rfloor)$$
+     $$\text{spaceForRows} = \max(0, \text{currentCapacity} - \text{currentHeight} - \text{tableOverhead})$$
+     $$\text{maxRowsThatFit} = \max(1, \lfloor\text{spaceForRows} / \text{rowHeight}\rfloor)$$
    - If the table contains more rows than fit on the current page, it splits:
      - `rows.slice(0, maxRowsThatFit)` stays on the current page.
      - The remaining rows overflow to a continuation table block on the next page (`${baseId}-split-${pageNum}`).
      - Table styling (`tableWidth`, `borderStyle`, `padding`, `rowSpacing`, `title`) is preserved across split continuations.
 3. **Underflow & Pull-Back:**
-   - When table rows or layout blocks are deleted or when switching to a taller paper format (e.g. Letter to Tabloid), `mergeSplitTablesInRows` recombines all rows. If the entire table fits on Page 1, it pulls back automatically and removes trailing empty pages.
+   - When table rows or layout blocks are deleted or when switching to a taller paper format, `mergeSplitTablesInRows` recombines all rows. If the entire table fits on Page 1, it pulls back automatically and removes trailing empty pages.
 4. **Transparent Cross-Fragment Operations:**
    - All table mutation actions resolve table blocks across pages using base ID matching (`isMatchingTableBlock`).
 5. **Auto-Navigation:**
@@ -236,8 +251,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.27 × 11.69 in",
     widthPx: 794,
     minHeightPx: 1123,
-    page1Capacity: 16.0,
-    pageNCapacity: 19.0,
+    page1Capacity: 650,
+    pageNCapacity: 780,
   },
   letter: {
     id: "letter",
@@ -248,8 +263,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.5 × 11 in",
     widthPx: 816,
     minHeightPx: 1056,
-    page1Capacity: 13.5,
-    pageNCapacity: 16.0,
+    page1Capacity: 600,
+    pageNCapacity: 720,
   },
   legal: {
     id: "legal",
@@ -260,8 +275,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "8.5 × 14 in",
     widthPx: 816,
     minHeightPx: 1344,
-    page1Capacity: 21.0,
-    pageNCapacity: 25.0,
+    page1Capacity: 860,
+    pageNCapacity: 1020,
   },
   tabloid: {
     id: "tabloid",
@@ -272,8 +287,8 @@ export const PAPER_SIZES: Record<PaperSize, PaperSizeConfig> = {
     dimensionsIn: "11 × 17 in",
     widthPx: 1056,
     minHeightPx: 1632,
-    page1Capacity: 25.0,
-    pageNCapacity: 30.0,
+    page1Capacity: 1080,
+    pageNCapacity: 1260,
   },
 };
 
@@ -406,5 +421,11 @@ export interface DocumentStateSnapshot {
   metadata: DocumentMetadata;
   pages: CanvasPage[];
   paperSize?: PaperSize;
+}
+
+export interface HistorySnapshot {
+  pages: CanvasPage[];
+  metadata: DocumentMetadata;
+  paperSize: PaperSize;
 }
 ```

@@ -28,7 +28,7 @@ export function DocumentPreviewModal({ className = "" }: DocumentPreviewModalPro
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
 
-  const paperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.tabloid;
+  const paperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.a4;
 
   // Handle ESC key to close modal
   useEffect(() => {
