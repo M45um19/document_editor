@@ -11,7 +11,7 @@ export const INITIAL_TEMPLATE_DATA: DocumentStateSnapshot = {
     documentNumber: "C-2026-061",
     documentDate: "2026-09-14",
   },
-  paperSize: "tabloid",
+  paperSize: "a4",
   pages: [
     {
       pageNumber: 1,

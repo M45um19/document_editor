@@ -1,7 +1,10 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { AutoExpandingTextareaProps } from "../../types";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function AutoExpandingTextarea({
   value,
@@ -14,16 +17,34 @@ export function AutoExpandingTextarea({
 }: AutoExpandingTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const resize = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.max(14, textareaRef.current.scrollHeight)}px`;
-    }
-  };
+  const resize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    // Reset height to auto first to let scrollHeight accurately represent contents
+    el.style.height = "auto";
+    const newHeight = Math.max(16, el.scrollHeight);
+    el.style.height = `${newHeight}px`;
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    resize();
+  }, [value, style?.fontSize, style?.fontFamily, style?.fontWeight, style?.textAlign, resize]);
 
   useEffect(() => {
     resize();
-  }, [value, style?.fontSize, style?.fontFamily, style?.fontWeight]);
+
+    // Re-calculate when web fonts finish downloading
+    if (typeof document !== "undefined" && document.fonts) {
+      document.fonts.ready.then(() => {
+        resize();
+      });
+    }
+
+    const handleResize = () => resize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [resize]);
 
   return (
     <textarea
@@ -31,6 +52,9 @@ export function AutoExpandingTextarea({
       value={value}
       onFocus={onFocus}
       onClick={onClick}
+      onInput={() => {
+        resize();
+      }}
       onChange={(e) => {
         onChange(e);
         resize();
@@ -38,6 +62,8 @@ export function AutoExpandingTextarea({
       rows={1}
       style={{
         lineHeight: 1.25,
+        overflow: "hidden",
+        boxSizing: "border-box",
         ...style,
       }}
       className={className}

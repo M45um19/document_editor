@@ -247,8 +247,8 @@ export const getPageLayoutRows = (page: CanvasPage): PageGridRow[] => {
 };
 
 // Dynamic Page Capacity in Pixels based on Paper Size
-export const getPageCapacity = (pageNumber: number, paperSize: PaperSize = "tabloid"): number => {
-  const config = PAPER_SIZES[paperSize] || PAPER_SIZES.tabloid;
+export const getPageCapacity = (pageNumber: number, paperSize: PaperSize = "a4"): number => {
+  const config = PAPER_SIZES[paperSize] || PAPER_SIZES.a4;
   return pageNumber === 1 ? config.page1Capacity : config.pageNCapacity;
 };
 
@@ -271,7 +271,7 @@ export const getTableRowHeight = (table: TableBlock): number => {
 };
 
 // Estimated height in pixels per block type
-export const getBlockHeight = (block: CanvasBlock): number => {
+export const getBlockHeight = (block: CanvasBlock, columnWidthPercent: number = 100): number => {
   switch (block.type) {
     case "table": {
       const table = block as TableBlock;
@@ -282,12 +282,14 @@ export const getBlockHeight = (block: CanvasBlock): number => {
       const content = block.content || "";
       const fontSize = block.fontSize || 14;
       const explicitLines = content.split("\n");
+      const widthRatio = Math.max(0.15, (columnWidthPercent || 100) / 100);
+      const charsPerFullLine = Math.floor(65 * (14 / fontSize));
+      const wrapFactor = Math.max(6, Math.floor(charsPerFullLine * widthRatio));
       let totalLines = 0;
       explicitLines.forEach((line) => {
-        const wrapFactor = Math.max(30, Math.floor(75 * (14 / fontSize)));
         totalLines += Math.max(1, Math.ceil(line.length / wrapFactor) || 1);
       });
-      const lineHeight = Math.round(fontSize * 1.3);
+      const lineHeight = Math.max(16, Math.round(fontSize * 1.3));
       return totalLines * lineHeight + 8;
     }
     case "image": {
@@ -314,7 +316,8 @@ export const getBlockWeight = getBlockHeight;
 
 export const getColumnHeight = (col: PageGridColumn): number => {
   if (!col.blocks || col.blocks.length === 0) return 40;
-  return col.blocks.reduce((sum, b) => sum + getBlockHeight(b), 0);
+  const colWidth = col.width ?? 100;
+  return col.blocks.reduce((sum, b) => sum + getBlockHeight(b, colWidth), 0);
 };
 
 export const getColumnWeight = getColumnHeight;
@@ -380,7 +383,7 @@ const mergeSplitTablesInRows = (rows: PageGridRow[]): PageGridRow[] => {
   return mergedRows;
 };
 
-export const reflowPages = (pages: CanvasPage[], paperSize: PaperSize = "tabloid"): CanvasPage[] => {
+export const reflowPages = (pages: CanvasPage[], paperSize: PaperSize = "a4"): CanvasPage[] => {
   if (!pages || pages.length === 0) {
     return [
       {
@@ -391,7 +394,7 @@ export const reflowPages = (pages: CanvasPage[], paperSize: PaperSize = "tabloid
     ];
   }
 
-  const effectivePaperSize = paperSize || "tabloid";
+  const effectivePaperSize = paperSize || "a4";
 
   // 1. Collect all layout rows in continuous sequence across all pages
   const allRows: PageGridRow[] = [];

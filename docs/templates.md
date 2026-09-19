@@ -39,7 +39,7 @@ Positioned immediately below the main application header (`bg-[#eef2f7]`):
   * **Active Tab:** Rendered in white (`bg-white`), highlighted with `text-blue-600`, with a bottom white blend line connecting seamlessly to the workspace.
   * **Inactive Tabs:** Rendered with muted slate typography and subtle hover effects.
 * **Tab Creation & Operations:**
-  * **Add Tab (`+` Button):** The **exclusive** entry point for creating new templates. Clicking `+` generates a new template initialized with default **Tabloid / Ledger** paper size, allocates its separate `localStorage` slot, and focuses it immediately.
+  * **Add Tab (`+` Button):** The **exclusive** entry point for creating new templates. Clicking `+` generates a new template initialized with default **A4** standard paper size, allocates its separate `localStorage` slot, and focuses it immediately.
   * **Switch Tab:** Clicking any tab auto-saves the current template (including its active `paperSize`) and loads the selected template's independent design and paper format into the canvas.
   * **Close Tab (`X`):** Deletes the template and its storage slot, focusing an adjacent template.
 
@@ -85,11 +85,11 @@ Each template is completely isolated in `localStorage` to ensure independent edi
    - The system checks `localStorage` for `document_editor_templates_list`.
    - The active template's dedicated payload is read from `doc_template_data_${activeTemplateId}`.
    - `getTemplateData` verifies that Page 1 contains the modern `page-row-header` and `page-row-divider` grid rows. If missing (legacy snapshot), it automatically migrates the structure before loading into the editor canvas.
-   - Restores the saved `paperSize` (defaults to `"tabloid"` if unspecified).
+   - Restores the saved `paperSize` (defaults to `"a4"` if unspecified).
 
 2. **Template Creation via `+` in `TabBar`:**
    - Auto-saves current active template.
-   - Generates a new ID (e.g. `template-2`) and writes the initial default document structure (`INITIAL_TEMPLATE_DATA`, defaulting to `paperSize: "tabloid"`) into `doc_template_data_template-2`.
+   - Generates a new ID (e.g. `template-2`) and writes the initial default document structure (`INITIAL_TEMPLATE_DATA`, defaulting to `paperSize: "a4"`) into `doc_template_data_template-2`.
    - Appends to templates list, sets as active, and populates the canvas.
 
 3. **Switching Templates:**

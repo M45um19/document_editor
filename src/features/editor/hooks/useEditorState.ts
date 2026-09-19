@@ -23,6 +23,7 @@ import {
   PaperSize,
   PAPER_SIZES,
   EditorStoreState,
+  HistorySnapshot,
 } from "../types";
 import {
   INITIAL_METADATA,
@@ -64,6 +65,35 @@ export {
   reflowPages,
 };
 
+const MAX_HISTORY = 40;
+let lastContinuousEditTime = 0;
+
+const pushSnapshot = (
+  state: EditorStoreState,
+  isContinuous = false
+): { past: HistorySnapshot[]; future: HistorySnapshot[] } => {
+  const now = Date.now();
+  if (isContinuous && now - lastContinuousEditTime < 800) {
+    lastContinuousEditTime = now;
+    return {
+      past: state.past || [],
+      future: [],
+    };
+  }
+
+  lastContinuousEditTime = now;
+  const snapshot: HistorySnapshot = {
+    pages: state.pages,
+    metadata: { ...state.metadata },
+    paperSize: state.paperSize,
+  };
+  const newPast = [...(state.past || []), snapshot].slice(-MAX_HISTORY);
+  return {
+    past: newPast,
+    future: [],
+  };
+};
+
 const autoSaveToStorage = (
   templateId: string,
   metadata: DocumentMetadata,
@@ -76,8 +106,8 @@ const autoSaveToStorage = (
         paperSize ||
         (typeof useEditorState !== "undefined" && useEditorState.getState
           ? useEditorState.getState().paperSize
-          : "tabloid") ||
-        "tabloid";
+          : "a4") ||
+        "a4";
       const snapshot: DocumentStateSnapshot = {
         metadata,
         pages,
@@ -94,10 +124,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   activeTemplateId: "template-1",
   selectedBlockId: null,
   selectedCell: null,
-  selectedRowId: "page-row-header",
-  selectedColumnId: "col-header-company",
+  selectedRowId: null,
+  selectedColumnId: null,
   metadata: INITIAL_METADATA,
-  paperSize: "tabloid",
+  paperSize: "a4",
   pages: [
     {
       pageNumber: 1,
@@ -111,6 +141,62 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   isFullscreen: false,
   lastSavedAt: null,
   saveMessage: null,
+
+  // History (Undo / Redo)
+  past: [],
+  future: [],
+
+  undo: () => {
+    set((state) => {
+      if (!state.past || state.past.length === 0) return state;
+      const previous = state.past[state.past.length - 1];
+      const newPast = state.past.slice(0, -1);
+      const currentSnapshot: HistorySnapshot = {
+        pages: state.pages,
+        metadata: { ...state.metadata },
+        paperSize: state.paperSize,
+      };
+      const newFuture = [currentSnapshot, ...(state.future || [])].slice(0, MAX_HISTORY);
+
+      lastContinuousEditTime = 0;
+      autoSaveToStorage(state.activeTemplateId, previous.metadata, previous.pages, previous.paperSize);
+
+      return {
+        pages: previous.pages,
+        metadata: previous.metadata,
+        paperSize: previous.paperSize,
+        past: newPast,
+        future: newFuture,
+        activePage: Math.min(state.activePage, previous.pages.length),
+      };
+    });
+  },
+
+  redo: () => {
+    set((state) => {
+      if (!state.future || state.future.length === 0) return state;
+      const next = state.future[0];
+      const newFuture = state.future.slice(1);
+      const currentSnapshot: HistorySnapshot = {
+        pages: state.pages,
+        metadata: { ...state.metadata },
+        paperSize: state.paperSize,
+      };
+      const newPast = [...(state.past || []), currentSnapshot].slice(-MAX_HISTORY);
+
+      lastContinuousEditTime = 0;
+      autoSaveToStorage(state.activeTemplateId, next.metadata, next.pages, next.paperSize);
+
+      return {
+        pages: next.pages,
+        metadata: next.metadata,
+        paperSize: next.paperSize,
+        past: newPast,
+        future: newFuture,
+        activePage: Math.min(state.activePage, next.pages.length),
+      };
+    });
+  },
 
   setActiveTemplateId: (activeTemplateId) => {
     set({ activeTemplateId });
@@ -151,9 +237,11 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   setZoomLevel: (zoomLevel) => set({ zoomLevel }),
   setPaperSize: (paperSize: PaperSize) => {
     set((state) => {
+      const history = pushSnapshot(state);
       const reflowed = reflowPages(state.pages, paperSize);
       autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, paperSize);
       return {
+        ...history,
         paperSize,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
@@ -165,6 +253,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   addPage: () => {
     set((state) => {
+      const history = pushSnapshot(state);
       const nextPageNum = state.pages.length + 1;
       const newRowId = `row-${Date.now()}-1`;
       const newColId = `col-${Date.now()}-1`;
@@ -183,9 +272,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         blocks: [],
       };
       const updatedPages = [...state.pages, newPage];
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: reflowed.length,
         selectedRowId: newRowId,
@@ -199,13 +289,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   deletePage: (pageNumber) => {
     set((state) => {
       if (state.pages.length <= 1) return state;
+      const history = pushSnapshot(state);
       const remainingPages = state.pages
         .filter((p) => p.pageNumber !== pageNumber)
         .map((p, idx) => ({ ...p, pageNumber: idx + 1 }));
-      const reflowed = reflowPages(remainingPages);
+      const reflowed = reflowPages(remainingPages, state.paperSize);
       const newActive = Math.min(state.activePage, reflowed.length);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: newActive,
       };
@@ -214,6 +306,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   addPageRow: (pageNumber) => {
     set((state) => {
+      const history = pushSnapshot(state);
       const newRowId = `row-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       const newColId = `col-${Date.now()}-1`;
       const newRow: PageGridRow = {
@@ -242,9 +335,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         return p;
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
         selectedRowId: newRowId,
@@ -264,6 +358,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       });
       if (totalRows <= 1) return state;
 
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.filter((r) => r.id !== targetId);
@@ -274,9 +369,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         };
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
         selectedRowId: null,
@@ -289,6 +385,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
     set((state) => {
       const targetRowId = rowId || state.selectedRowId;
       const newColId = `col-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const history = pushSnapshot(state);
 
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
@@ -312,9 +409,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         };
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
         selectedColumnId: newColId,
@@ -325,7 +423,17 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
   deletePageColumn: (pageNumber, rowId, columnId) => {
     set((state) => {
       const targetRowId = rowId || state.selectedRowId;
+      let hasDeletableCol = false;
+      state.pages.forEach((p) => {
+        getPageLayoutRows(p).forEach((r) => {
+          if ((r.id === targetRowId || (!targetRowId && p.layoutRows?.[0]?.id === r.id)) && r.columns.length > 1) {
+            hasDeletableCol = true;
+          }
+        });
+      });
+      if (!hasDeletableCol) return state;
 
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => {
@@ -356,14 +464,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         };
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
   updateRowColumnWidths: (pageNumber, rowId, columnWidths) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const widthMap = new Map(columnWidths.map((cw) => [cw.id, cw.width]));
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
@@ -385,13 +494,14 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
-      return { pages: updatedPages };
+      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages, state.paperSize);
+      return { ...history, pages: updatedPages };
     });
   },
 
   updateRowMargins: (pageNumber, rowId, margins) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => {
@@ -410,14 +520,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
   updateRowPadding: (pageNumber, rowId, padding) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => {
@@ -436,9 +547,9 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
@@ -476,7 +587,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   loadTemplate: (snapshot, templateId) => {
     if (!snapshot || !snapshot.pages || snapshot.pages.length === 0) return;
-    const targetPaperSize = snapshot.paperSize || "tabloid";
+    const targetPaperSize = snapshot.paperSize || "a4";
     let pagesToLoad = snapshot.pages;
     const page1 = pagesToLoad[0];
     const rows = getPageLayoutRows(page1);
@@ -503,6 +614,8 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       selectedCell: null,
       selectedRowId: null,
       selectedColumnId: null,
+      past: [],
+      future: [],
       saveMessage: "Template loaded successfully!",
     }));
     setTimeout(() => {
@@ -512,6 +625,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   resetToDefault: () => {
     set((state) => {
+      const history = pushSnapshot(state);
       const defaultPages: CanvasPage[] = [
         {
           pageNumber: 1,
@@ -519,16 +633,17 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: INITIAL_BLOCKS,
         },
       ];
-      autoSaveToStorage(state.activeTemplateId, INITIAL_METADATA, defaultPages, "tabloid");
+      autoSaveToStorage(state.activeTemplateId, INITIAL_METADATA, defaultPages, "a4");
       return {
+        ...history,
         metadata: INITIAL_METADATA,
-        paperSize: "tabloid",
+        paperSize: "a4",
         pages: defaultPages,
         activePage: 1,
         selectedBlockId: null,
         selectedCell: null,
-        selectedRowId: "page-row-header",
-        selectedColumnId: "col-header-company",
+        selectedRowId: null,
+        selectedColumnId: null,
         saveMessage: "Reset to default template",
       };
     });
@@ -595,6 +710,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
     }
 
     set((state) => {
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => {
@@ -618,9 +734,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
         selectedBlockId: blockId,
@@ -638,27 +755,8 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
       const currentPage = state.pages[targetIdx] || state.pages[0];
       const currentRows = getPageLayoutRows(currentPage);
 
-      let targetRow =
-        currentRows.find((r) => r.id === state.selectedRowId) ||
-        currentRows[currentRows.length - 1];
-      if (!targetRow) {
-        const newRowId = `row-${Date.now()}-1`;
-        const newColId = `col-${Date.now()}-1`;
-        targetRow = { id: newRowId, columns: [{ id: newColId, blocks: [] }] };
-        currentRows.push(targetRow);
-      }
-
-      let targetCol =
-        targetRow.columns.find((c) => c.id === state.selectedColumnId) ||
-        targetRow.columns[0];
-      if (!targetCol) {
-        const newColId = `col-${Date.now()}-1`;
-        targetCol = { id: newColId, blocks: [] };
-        targetRow.columns.push(targetCol);
-      }
-
-      let newBlock: CanvasBlock;
       const blockId = `block-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      let newBlock: CanvasBlock;
 
       if (type === "text") {
         newBlock = {
@@ -713,21 +811,89 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         };
       }
 
-      const updatedRows = currentRows.map((r) => {
-        if (r.id === targetRow.id) {
-          const updatedCols = r.columns.map((c) => {
-            if (c.id === targetCol.id) {
-              return {
-                ...c,
-                blocks: [...c.blocks, newBlock],
-              };
-            }
-            return c;
-          });
-          return { ...r, columns: updatedCols };
+      // Check if we should insert into an existing selected column or create a new dedicated row
+      const selectedRow = state.selectedRowId
+        ? currentRows.find((r) => r.id === state.selectedRowId)
+        : null;
+
+      // Never insert tables or large blocks into header rows or into rows that already have tables
+      const isHeaderRow =
+        selectedRow?.id === "page-row-header" ||
+        selectedRow?.columns?.some(
+          (c) => c.id === "col-header-company" || c.id === "col-header-logo"
+        );
+      const isTableRow = selectedRow?.columns?.some((c) =>
+        c.blocks.some((b) => b.type === "table")
+      );
+
+      const shouldCreateNewRow =
+        type === "table" || !selectedRow || isHeaderRow || isTableRow;
+
+      let updatedRows: PageGridRow[];
+      let targetRowId: string;
+      let targetColId: string;
+
+      if (shouldCreateNewRow) {
+        const newRowId = `row-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const newColId = `col-${Date.now()}-1`;
+        const newRow: PageGridRow = {
+          id: newRowId,
+          marginTop: 0,
+          marginBottom: type === "table" ? 16 : 12,
+          paddingTop: 0,
+          paddingBottom: 0,
+          columns: [
+            {
+              id: newColId,
+              width: 100,
+              blocks: [newBlock],
+            },
+          ],
+        };
+
+        targetRowId = newRowId;
+        targetColId = newColId;
+
+        // If a row is selected and it's not header, insert after it; otherwise append at end of current page
+        const insertAfterIdx =
+          selectedRow && !isHeaderRow
+            ? currentRows.findIndex((r) => r.id === selectedRow.id)
+            : currentRows.length - 1;
+
+        if (insertAfterIdx >= 0 && insertAfterIdx < currentRows.length) {
+          updatedRows = [
+            ...currentRows.slice(0, insertAfterIdx + 1),
+            newRow,
+            ...currentRows.slice(insertAfterIdx + 1),
+          ];
+        } else {
+          updatedRows = [...currentRows, newRow];
         }
-        return r;
-      });
+      } else {
+        targetRowId = selectedRow.id;
+        const targetCol =
+          selectedRow.columns.find((c) => c.id === state.selectedColumnId) ||
+          selectedRow.columns[0];
+        targetColId = targetCol.id;
+
+        updatedRows = currentRows.map((r) => {
+          if (r.id === selectedRow.id) {
+            const updatedCols = r.columns.map((c) => {
+              if (c.id === targetCol.id) {
+                return {
+                  ...c,
+                  blocks: [...c.blocks, newBlock],
+                };
+              }
+              return c;
+            });
+            return { ...r, columns: updatedCols };
+          }
+          return r;
+        });
+      }
+
+      const history = pushSnapshot(state);
 
       const updatedPages = state.pages.map((page, idx) => {
         if (idx === targetIdx) {
@@ -740,16 +906,17 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         return page;
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
 
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
         activeTool: "select",
-        selectedBlockId: type === "text" || type === "table" ? blockId : state.selectedBlockId,
-        selectedRowId: targetRow.id,
-        selectedColumnId: targetCol.id,
+        selectedBlockId: blockId,
+        selectedRowId: targetRowId,
+        selectedColumnId: targetColId,
         selectedCell: null,
       };
     });
@@ -757,6 +924,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   removeElement: (pageNumber, blockId) => {
     set((state) => {
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -772,9 +940,10 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(state.activePage, reflowed.length),
         selectedBlockId: state.selectedBlockId === blockId ? null : state.selectedBlockId,
@@ -786,14 +955,16 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   setMetadata: (updates) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedMetadata = { ...state.metadata, ...updates };
-      autoSaveToStorage(state.activeTemplateId, updatedMetadata, state.pages);
-      return { metadata: updatedMetadata };
+      autoSaveToStorage(state.activeTemplateId, updatedMetadata, state.pages, state.paperSize);
+      return { ...history, metadata: updatedMetadata };
     });
   },
 
   updateTextBlock: (pageNumber, blockId, content) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -814,14 +985,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
   updateBlockStyle: (pageNumber, blockId, style) => {
     set((state) => {
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -842,9 +1014,9 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
@@ -866,6 +1038,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   updateTableCellStyle: (pageNumber, blockId, rowId, columnKey, style) => {
     set((state) => {
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -903,13 +1076,14 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
-      return { pages: updatedPages };
+      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages, state.paperSize);
+      return { ...history, pages: updatedPages };
     });
   },
 
   updateTableRow: (pageNumber, blockId, rowId, field, value) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -945,8 +1119,8 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages);
-      return { pages: updatedPages };
+      autoSaveToStorage(state.activeTemplateId, state.metadata, updatedPages, state.paperSize);
+      return { ...history, pages: updatedPages };
     });
   },
 
@@ -967,6 +1141,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         });
       });
 
+      const history = pushSnapshot(state);
       const nextId = maxExistingId + 1;
       const newRow: TableRowItem = {
         id: nextId,
@@ -1003,13 +1178,14 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         };
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
 
       // If adding this row caused a new page to be created, focus the new page so the user sees it
       const targetPageNum = reflowed.length > state.pages.length ? reflowed.length : state.activePage;
 
       return {
+        ...history,
         pages: reflowed,
         activePage: Math.min(targetPageNum, reflowed.length),
       };
@@ -1018,6 +1194,21 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
 
   deleteTableRow: (pageNumber, blockId, rowId) => {
     set((state) => {
+      let isAllowed = false;
+      state.pages.forEach((p) => {
+        getPageLayoutRows(p).forEach((r) => {
+          r.columns.forEach((c) => {
+            c.blocks.forEach((b) => {
+              if (b.type === "table" && isMatchingTableBlock(b, blockId) && b.rows.length > 1) {
+                isAllowed = true;
+              }
+            });
+          });
+        });
+      });
+      if (!isAllowed) return state;
+
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -1040,9 +1231,9 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
@@ -1050,6 +1241,7 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
     set((state) => {
       if (sourceIndex === destinationIndex) return state;
 
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -1080,14 +1272,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
         };
       });
 
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed };
     });
   },
 
   addTableColumn: (pageNumber, blockId) => {
     set((state) => {
+      const history = pushSnapshot(state);
       const newColId = `col_${Date.now()}`;
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
@@ -1122,14 +1315,31 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
   deleteTableColumn: (pageNumber, blockId, columnId) => {
     set((state) => {
+      let isAllowed = false;
+      state.pages.forEach((p) => {
+        getPageLayoutRows(p).forEach((r) => {
+          r.columns.forEach((c) => {
+            c.blocks.forEach((b) => {
+              if (b.type === "table" && isMatchingTableBlock(b, blockId)) {
+                const existingCols =
+                  b.columns && b.columns.length > 0 ? b.columns : [...DEFAULT_TABLE_COLUMNS];
+                if (existingCols.length > 1) isAllowed = true;
+              }
+            });
+          });
+        });
+      });
+      if (!isAllowed) return state;
+
+      const history = pushSnapshot(state);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -1165,14 +1375,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
   updateTableTitle: (pageNumber, blockId, title) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -1193,14 +1404,15 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 
   updateTableColumnLabel: (pageNumber, blockId, columnId, label) => {
     set((state) => {
+      const history = pushSnapshot(state, true);
       const updatedPages = state.pages.map((p) => {
         const currentRows = getPageLayoutRows(p);
         const updatedRows = currentRows.map((r) => ({
@@ -1229,9 +1441,9 @@ export const useEditorState = create<EditorStoreState>((set, get) => ({
           blocks: extractAllBlocksFromRows(updatedRows),
         };
       });
-      const reflowed = reflowPages(updatedPages);
-      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed);
-      return { pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
+      const reflowed = reflowPages(updatedPages, state.paperSize);
+      autoSaveToStorage(state.activeTemplateId, state.metadata, reflowed, state.paperSize);
+      return { ...history, pages: reflowed, activePage: Math.min(state.activePage, reflowed.length) };
     });
   },
 }));

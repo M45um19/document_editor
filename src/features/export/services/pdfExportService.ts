@@ -9,13 +9,13 @@ export async function exportDocumentToPdf(options: ExportPdfOptions = {}): Promi
   if (typeof window === "undefined") return;
 
   const state = useEditorState.getState();
-  const currentPaperSize = options.paperSize || state.paperSize || "tabloid";
+  const currentPaperSize = options.paperSize || state.paperSize || "a4";
   const docMetadata = options.metadata || state.metadata;
   const rawFileName =
     options.fileName || docMetadata.documentTitle || "Document_Project";
 
-  const paperConfig = PAPER_FORMAT_MAP[currentPaperSize] || PAPER_FORMAT_MAP.tabloid;
-  const paperDimConfig = PAPER_SIZES[currentPaperSize] || PAPER_SIZES.tabloid;
+  const paperConfig = PAPER_FORMAT_MAP[currentPaperSize] || PAPER_FORMAT_MAP.a4;
+  const paperDimConfig = PAPER_SIZES[currentPaperSize] || PAPER_SIZES.a4;
 
   // 1. Locate all clean document sheets in DOM (prefer offscreen export root)
   const exportRoot = document.getElementById("clean-export-root");

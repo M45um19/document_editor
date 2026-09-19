@@ -282,7 +282,7 @@ export function CanvasPageSheet({
     }
   };
 
-  const currentPaperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.tabloid;
+  const currentPaperConfig = PAPER_SIZES[paperSize] || PAPER_SIZES.a4;
 
   return (
     <div

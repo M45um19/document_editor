@@ -35,7 +35,7 @@ export function CanvasTextBlock({
         e.stopPropagation();
         onSelect();
       }}
-      className={`transition-all relative group/text cursor-text ${
+      className={`transition-colors relative group/text cursor-text ${
         isSelected
           ? "border border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/15 rounded-xl p-2 sm:p-2.5 shadow-xs"
           : "border border-transparent hover:border-slate-200/80 rounded p-0 bg-transparent"
@@ -102,7 +102,7 @@ export function CanvasTextBlock({
         }}
         onChange={(e) => onUpdateContent(e.target.value)}
         style={textStyle}
-        className={`w-full bg-transparent outline-none resize-none leading-snug transition-all ${
+        className={`w-full bg-transparent outline-none resize-none leading-snug transition-colors ${
           isSelected
             ? "border border-blue-200 focus:border-blue-400 focus:bg-white rounded-md p-1"
             : "border-0 p-0 hover:border-0 rounded"
